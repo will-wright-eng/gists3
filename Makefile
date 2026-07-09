@@ -18,6 +18,10 @@ help: ## list make commands
 fmt: ## gofmt all packages
 	gofmt -w .
 
+fmt-check: ## fail if any file needs gofmt
+	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then \
+		echo "gofmt needed on:"; echo "$$unformatted"; exit 1; fi
+
 vet: ## go vet, including integration-tagged files
 	go vet ./...
 	go vet -tags integration ./...
@@ -40,14 +44,19 @@ integration: ## live-API tests; requires GIST_TOKEN (gist scope) or an authentic
 example: ## run the end-to-end example; requires GIST_TOKEN or an authenticated gh CLI
 	go run ./cmd/example
 
-build: ## compile all packages
+build: ## compile all packages; g3 binary lands in dist/
 	go build ./...
+	@mkdir -p dist
+	go build -o dist/ ./cmd/g3
+
+install: build ## copy the g3 binary into $$HOME/go/bin
+	@mkdir -p $(HOME)/go/bin
+	install dist/g3 $(HOME)/go/bin/g3
 
 check: ## everything CI runs: fmt-check, vet, lint, race tests, build
-	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then \
-		echo "gofmt needed on:"; echo "$$unformatted"; exit 1; fi
-	$(MAKE) vet lint race build
+	$(MAKE) fmt-check vet lint race build
 
 clean: ## remove test caches and build artifacts
 	go clean -testcache
 	go clean ./...
+	rm -rf dist
