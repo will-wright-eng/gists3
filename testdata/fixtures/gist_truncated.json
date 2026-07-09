@@ -1,0 +1,14 @@
+{
+  "id": "tr123",
+  "created_at": "2026-07-01T12:00:00Z",
+  "description": "truncated demo",
+  "files": {
+    "big.txt": {
+      "filename": "big.txt",
+      "size": 12,
+      "truncated": true,
+      "content": "full con",
+      "raw_url": "{{BASE}}/raw/big.txt"
+    }
+  }
+}

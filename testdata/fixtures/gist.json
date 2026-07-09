@@ -1,0 +1,28 @@
+{
+  "id": "abc123",
+  "created_at": "2026-07-01T12:00:00Z",
+  "description": "demo bucket",
+  "files": {
+    ".bucket": {
+      "filename": ".bucket",
+      "size": 17,
+      "truncated": false,
+      "content": "created by gists3",
+      "raw_url": "{{BASE}}/raw/bucket-placeholder"
+    },
+    "conf.json": {
+      "filename": "conf.json",
+      "size": 15,
+      "truncated": false,
+      "content": "{\"debug\":true}\n",
+      "raw_url": "{{BASE}}/raw/conf.json"
+    },
+    "notes/2026.md": {
+      "filename": "notes/2026.md",
+      "size": 8,
+      "truncated": false,
+      "content": "# notes\n",
+      "raw_url": "{{BASE}}/raw/notes-2026.md"
+    }
+  }
+}
