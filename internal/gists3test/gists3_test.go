@@ -1,8 +1,10 @@
-// Shared fake-GitHub helpers and client-level contract tests. Tests for a
-// specific operation live in the _test.go file mirroring its source file
-// (bucket_test.go, object_test.go, list_test.go, config_test.go,
-// errors_test.go).
-package gists3_test
+// Package gists3test is the black-box suite for the root gists3 package:
+// every test drives the public API only, against a mux-backed fake GitHub.
+// This file holds the shared helpers and client-level contract tests;
+// per-area tests live in bucket_test.go, object_test.go, list_test.go,
+// errors_test.go, and config_test.go. integration_test.go runs against the
+// live API behind the integration build tag.
+package gists3test
 
 import (
 	"bytes"

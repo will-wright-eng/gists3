@@ -28,7 +28,7 @@ jobs:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: |
           if [ -n "$GIST_TOKEN" ]; then
-            go run ./example
+            go run ./cmd/example
           else
             echo "GIST_TOKEN secret not set; skipping example run"
           fi

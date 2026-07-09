@@ -1,4 +1,4 @@
-package gists3_test
+package gists3test
 
 import (
 	"net/http"

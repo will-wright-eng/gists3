@@ -1,6 +1,6 @@
 //go:build integration
 
-package gists3_test
+package gists3test
 
 import (
 	"bytes"
