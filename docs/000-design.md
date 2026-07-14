@@ -356,7 +356,7 @@ We export the concrete `*Client`, not a `Storage` interface. Consumers who need 
 | v1.1 | `token_command` config field | Shell out to a secret manager instead of storing a plaintext token (§5.6) |
 | v1.2 | `GetObjectInput.VersionID` | Read a key at a historical gist revision SHA — S3 versioning vocabulary over gist commit history, read-only |
 | v1.2 | Conditional writes | Investigate `If-Match`-style optimistic concurrency via revision SHA on PATCH; only if the API can actually honor it |
-| v2 | `cmd/g3` CLI | `g3 cp local.txt g3://<gist-id>/remote.txt`, `ls`, `rm`; aws-cli flavored. `cp` is an upsert — the underlying PATCH creates or replaces the file, so there is no separate update subcommand. Reads §5.6 config for identity. |
+| v2 | `cmd/g3` CLI | `g3 cp local.txt g3://<gist-id>/remote.txt`, `ls`, `rm`; aws-cli flavored. `cp` is an upsert — the underlying PATCH creates or replaces the file, so there is no separate update subcommand. Reads §5.6 config for identity. *(`cp` and `ls` shipped — see [001-cp-command.md](001-cp-command.md); `rm` remains open.)* |
 | v2 | Multi-gist buckets | Shard one logical bucket across gists to bypass per-gist file limits; adds an index-consistency problem — needs its own design doc before any code |
 
 ---

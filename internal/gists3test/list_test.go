@@ -47,6 +47,35 @@ func TestListObjectsV2Prefix(t *testing.T) {
 	}
 }
 
+func TestListBucketsDetails(t *testing.T) {
+	mux, client, _ := newServer(t)
+	mux.HandleFunc("GET /gists", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"id":"abc123","description":"ci state","public":true,
+			"created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-02T09:00:00Z",
+			"files":{".bucket":{"filename":".bucket","size":17},
+			         "conf.json":{"filename":"conf.json","size":1200},
+			         "notes/2026.md":{"filename":"notes/2026.md","size":800}}}]`))
+	})
+	out, err := client.ListBuckets(ctx, &gists3.ListBucketsInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Buckets) != 1 {
+		t.Fatalf("got %d buckets, want 1", len(out.Buckets))
+	}
+	b := out.Buckets[0]
+	if b.Description != "ci state" || !b.Public {
+		t.Errorf("Description/Public = %q/%v, want \"ci state\"/true", b.Description, b.Public)
+	}
+	if want := time.Date(2026, 7, 2, 9, 0, 0, 0, time.UTC); !b.UpdatedAt.Equal(want) {
+		t.Errorf("UpdatedAt = %v, want %v", b.UpdatedAt, want)
+	}
+	// The ".bucket" placeholder is excluded, matching ListObjectsV2.
+	if b.ObjectCount != 2 || b.TotalSize != 2000 {
+		t.Errorf("ObjectCount/TotalSize = %d/%d, want 2/2000", b.ObjectCount, b.TotalSize)
+	}
+}
+
 func TestListBucketsPagination(t *testing.T) {
 	mux, client, _ := newServer(t)
 	pages := map[string]int{}

@@ -6,9 +6,12 @@ import "time"
 // them. If GitHub changes a field, this file is the blast radius.
 
 type Gist struct {
-	ID        string              `json:"id"`
-	CreatedAt time.Time           `json:"created_at"`
-	Files     map[string]GistFile `json:"files"`
+	ID          string              `json:"id"`
+	Description string              `json:"description"`
+	Public      bool                `json:"public"`
+	CreatedAt   time.Time           `json:"created_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+	Files       map[string]GistFile `json:"files"`
 }
 
 type GistFile struct {
