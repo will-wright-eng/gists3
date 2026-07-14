@@ -75,6 +75,37 @@ terminal. The highlights:
 | `ListBuckets` | Returns every gist the token can see, gists3-created or not |
 | `CreateBucket` | Seeds a `.bucket` placeholder (gists can't be empty); `ListObjectsV2` hides it |
 
+## CLI: `g3`
+
+A small aws-cli-flavored binary over the same library (design:
+[docs/001-cp-command.md](docs/001-cp-command.md)):
+
+```sh
+make install   # builds dist/g3 and copies it to ~/go/bin
+```
+
+```sh
+g3 ls                                       # list buckets (gists)
+g3 cp conf.json g3://<gist-id>/conf.json    # upload (an upsert, like PutObject)
+g3 cp conf.json g3://<gist-id>/             # key inferred from the filename
+g3 cp g3://<gist-id>/conf.json backup/      # download; parent dirs created
+g3 cp g3://<a>/conf.json g3://<b>/          # remote copy (client-side GET+PATCH)
+date | g3 cp - g3://<gist-id>/last-run      # stdin; "-" also means stdout
+g3 cp g3://<gist-id>/conf.json - | jq .     # body only — status lines are
+                                            # suppressed when either end is "-"
+```
+
+Credentials resolve from `GIST_TOKEN`, then the [config file](#config-file-opt-in),
+then the gh CLI (`gh auth token`). The layer that supplies the token supplies
+the whole identity: with `GIST_TOKEN` set, the config file is not consulted,
+so its `base_url` does not apply — GitHub Enterprise users relying on
+`base_url` should unset `GIST_TOKEN`.
+
+The backend's honesty rules apply on the command line too: empty files are
+refused (the Gist API rejects empty content), non-UTF-8 content is refused
+rather than silently corrupted (base64-encode binary data first), and uploads
+cap at 10 MiB. Exit codes: 0 success, 1 runtime failure, 2 usage error.
+
 ## Config file (opt-in)
 
 `New(token)` never reads env vars or files. For CLI use, an explicit
