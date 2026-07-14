@@ -252,9 +252,10 @@ Exit codes collapse aws-cli v2's taxonomy to the three a script can act on:
 | 2 | Usage error: wrong arity, unparseable `g3://` URI (empty gist ID) or non-`g3` URI scheme, prefix/bare-bucket form used as a source, stdin source with a prefix destination, rejected direction pair, unknown command |
 
 Implementation: a `usageError` wrapper type in `cmd/g3`; `main()` checks it
-with `errors.As` and picks the exit code. `ls` takes no arguments — passing
-any is a usage error (exit 2), so an aws-shaped `g3 ls g3://<id>/` fails
-loudly instead of silently listing every bucket; its runtime errors exit 1.
+with `errors.As` and picks the exit code. `ls` argument handling is
+specified in [002-ls-command.md](002-ls-command.md) §2.3 (originally
+argument-free; it now takes an optional `g3://` URI, and non-remote
+arguments remain usage errors).
 
 ### 4.6 Upload-path guards
 
@@ -421,6 +422,9 @@ cmd/g3/
 └── cp_test.go     # httptest-backed tests, all directions + local files
 ```
 
+*Superseded in part by [002](002-ls-command.md): `ls` later moved out of
+`main.go` into `cmd/g3/ls.go` as `lsBuckets`/`lsObjects`.*
+
 ### 6.2 Seams
 
 The stub's testability flaw is that `ls()` builds its own client and prints
@@ -434,6 +438,7 @@ func run(ctx context.Context, args []string, newClient clientFn,
 	stdin io.Reader, stdout, stderr io.Writer) error
 
 func ls(ctx context.Context, client *gists3.Client, stdout io.Writer) error
+// (ls was later split into lsBuckets/lsObjects in ls.go — see 002)
 
 // cp.go — classify is pure (parse + pair validation, all the exit-2 cases);
 // cp receives already-classified locations and does the I/O

@@ -480,10 +480,27 @@ type ListBucketsOutput struct {
 	Buckets []Bucket
 }
 
-// Bucket is one listing entry. Name is the gist ID.
+// Bucket is one listing entry. Name is the gist ID. The fields beyond the
+// S3 shape (Name, CreationDate) surface gist metadata the list response
+// carries anyway — a documented divergence, not an S3 emulation.
 type Bucket struct {
 	Name         string
 	CreationDate time.Time
+
+	// Description labels the gist in the GitHub UI; empty when unset.
+	Description string
+
+	// Public reports gist visibility. A secret gist is unlisted, NOT
+	// access-controlled — see CreateBucket.
+	Public bool
+
+	// UpdatedAt is the gist's last-modified time (per gist, not per file).
+	UpdatedAt time.Time
+
+	// ObjectCount and TotalSize cover the gist's files excluding the
+	// ".bucket" placeholder, matching what ListObjectsV2 reports.
+	ObjectCount int
+	TotalSize   int64
 }
 
 // ListBuckets returns EVERY gist the token can see, gists3-created or not —
@@ -501,7 +518,21 @@ func (c *Client) ListBuckets(ctx context.Context, _ *ListBucketsInput) (*ListBuc
 			return nil, err
 		}
 		for _, g := range gists {
-			out.Buckets = append(out.Buckets, Bucket{Name: g.ID, CreationDate: g.CreatedAt})
+			b := Bucket{
+				Name:         g.ID,
+				CreationDate: g.CreatedAt,
+				Description:  g.Description,
+				Public:       g.Public,
+				UpdatedAt:    g.UpdatedAt,
+			}
+			for name, f := range g.Files {
+				if name == bucketPlaceholder {
+					continue
+				}
+				b.ObjectCount++
+				b.TotalSize += f.Size
+			}
+			out.Buckets = append(out.Buckets, b)
 		}
 		if len(gists) < listPageSize {
 			return out, nil

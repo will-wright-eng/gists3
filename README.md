@@ -78,14 +78,18 @@ terminal. The highlights:
 ## CLI: `g3`
 
 A small aws-cli-flavored binary over the same library (design:
-[docs/001-cp-command.md](docs/001-cp-command.md)):
+[docs/001-cp-command.md](docs/001-cp-command.md),
+[docs/002-ls-command.md](docs/002-ls-command.md)):
 
 ```sh
 make install   # builds dist/g3 and copies it to ~/go/bin
 ```
 
 ```sh
-g3 ls                                       # list buckets (gists)
+g3 ls                                       # buckets: created, id, visibility,
+                                            #   objects, size, description
+g3 ls g3://<gist-id>/                       # one bucket's objects: size, key
+g3 ls g3://<gist-id>/notes/                 # prefix-filtered
 g3 cp conf.json g3://<gist-id>/conf.json    # upload (an upsert, like PutObject)
 g3 cp conf.json g3://<gist-id>/             # key inferred from the filename
 g3 cp g3://<gist-id>/conf.json backup/      # download; parent dirs created

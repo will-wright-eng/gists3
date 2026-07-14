@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/will-wright-eng/gists3"
 )
 
 const usage = `usage: g3 <command> [arguments]
@@ -22,7 +20,9 @@ commands:
                              URI, and "-" means stdin or stdout (a local file
                              named "-" is reachable as ./-). Directories are
                              not supported — there is no --recursive yet.
-  ls                         list buckets (gists) the token can see`
+  ls [g3://<gist-id>[/<prefix>]]
+                             list buckets (gists) the token can see, or one
+                             bucket's objects, optionally prefix-filtered`
 
 // usageError marks a command-line mistake: main exits 2 for these and 1 for
 // every runtime failure.
@@ -68,26 +68,28 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 		}
 		return cp(ctx, client, src, dst, stdin, stdout)
 	case "ls":
-		if len(args) != 1 {
-			return usagef("ls takes no arguments\n%s", usage)
+		if len(args) > 2 {
+			return usagef("ls takes at most one g3:// URI\n%s", usage)
+		}
+		var loc location
+		if len(args) == 2 {
+			var err error
+			if loc, err = parseArg(args[1]); err != nil {
+				return err
+			}
+			if loc.kind != locRemote {
+				return usagef("%q: ls lists gists; want g3://<gist-id>[/<prefix>]", args[1])
+			}
 		}
 		client, err := newClient(stderr)
 		if err != nil {
 			return err
 		}
-		return ls(ctx, client, stdout)
+		if loc.kind == locRemote {
+			return lsObjects(ctx, client, loc, stdout)
+		}
+		return lsBuckets(ctx, client, stdout)
 	default:
 		return usagef("unknown command %q\n%s", args[0], usage)
 	}
-}
-
-func ls(ctx context.Context, client *gists3.Client, stdout io.Writer) error {
-	out, err := client.ListBuckets(ctx, &gists3.ListBucketsInput{})
-	if err != nil {
-		return err
-	}
-	for _, b := range out.Buckets {
-		fmt.Fprintf(stdout, "%s  %s\n", b.CreationDate.Format("2006-01-02"), b.Name)
-	}
-	return nil
 }

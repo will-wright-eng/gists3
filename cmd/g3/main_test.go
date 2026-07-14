@@ -62,7 +62,10 @@ func TestRunUsageErrors(t *testing.T) {
 		"unknown command":      {"mv", "a", "b"},
 		"cp arity one":         {"cp", "only-one"},
 		"cp arity three":       {"cp", "a", "b", "c"},
-		"ls with arguments":    {"ls", "g3://abc123/"},
+		"ls two arguments":     {"ls", "g3://a", "g3://b"},
+		"ls local argument":    {"ls", "somedir"},
+		"ls stdio argument":    {"ls", "-"},
+		"ls foreign scheme":    {"ls", "s3://b"},
 		"local to local":       {"cp", "a.txt", "b.txt"},
 		"stdin to stdout":      {"cp", "-", "-"},
 		"stdin to local":       {"cp", "-", "a.txt"},
@@ -95,13 +98,84 @@ func TestRunCredentialErrorIsNotUsage(t *testing.T) {
 func TestRunLS(t *testing.T) {
 	mux, client := newServer(t)
 	mux.HandleFunc("GET /gists", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`[{"id":"abc123","created_at":"2026-07-01T10:00:00Z","files":{}}]`))
+		w.Write([]byte(`[
+			{"id":"abc123","description":"ci state","public":false,
+			 "created_at":"2026-07-01T10:00:00Z","updated_at":"2026-07-02T09:00:00Z",
+			 "files":{".bucket":{"filename":".bucket","size":17},
+			          "conf.json":{"filename":"conf.json","size":1229}}},
+			{"id":"def456","description":"","public":true,
+			 "created_at":"2026-06-15T08:30:00Z","updated_at":"2026-06-15T08:30:00Z",
+			 "files":{"a.txt":{"filename":"a.txt","size":100},
+			          "b.txt":{"filename":"b.txt","size":712}}},
+			{"id":"empty1","description":"fresh bucket","public":false,
+			 "created_at":"2026-05-01T00:00:00Z","updated_at":"2026-05-01T00:00:00Z",
+			 "files":{".bucket":{"filename":".bucket","size":17}}},
+			{"id":"messy1","description":"line1\nline2  ","public":true,
+			 "created_at":"2026-04-01T00:00:00Z","updated_at":"2026-04-01T00:00:00Z",
+			 "files":{"big.txt":{"filename":"big.txt","size":1047276}}}
+		]`))
 	})
 	var stdout bytes.Buffer
 	if err := run(ctx, []string{"ls"}, stubClient(client), strings.NewReader(""), &stdout, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := stdout.String(), "2026-07-01  abc123\n"; got != want {
-		t.Errorf("ls output = %q, want %q", got, want)
+	// messy1: the newline-bearing description flattens to one line, and
+	// 1047276 bytes — inside the [999.95K, 1M) window — promotes to "1.0M"
+	// instead of the seven-character "1022.7K" that would break the column.
+	want := "2026-07-01 10:00  abc123  secret   1 object     1.2K  ci state\n" +
+		"2026-06-15 08:30  def456  public   2 objects     812\n" +
+		"2026-05-01 00:00  empty1  secret   0 objects       0  fresh bucket\n" +
+		"2026-04-01 00:00  messy1  public   1 object     1.0M  line1 line2\n"
+	if got := stdout.String(); got != want {
+		t.Errorf("ls output:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestHumanSize(t *testing.T) {
+	for n, want := range map[int64]string{
+		0:        "0",
+		812:      "812",
+		1023:     "1023",
+		1024:     "1.0K",
+		1229:     "1.2K",
+		1023948:  "999.9K", // last value the K unit can render in six chars
+		1023949:  "1.0M",   // %.1fK would round to "1000.0K" — promoted
+		1048575:  "1.0M",
+		1048576:  "1.0M",
+		10 << 20: "10.0M",
+	} {
+		if got := humanSize(n); got != want {
+			t.Errorf("humanSize(%d) = %q, want %q", n, got, want)
+		}
+		if got := humanSize(n); len(got) > 6 {
+			t.Errorf("humanSize(%d) = %q overflows the %%6s column", n, got)
+		}
+	}
+}
+
+func TestRunLSBucket(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg  string
+		want string
+	}{
+		"all objects": {"g3://abc123", "  1.2K  conf.json\n   812  notes/2026.md\n"},
+		"prefix":      {"g3://abc123/notes/", "   812  notes/2026.md\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mux, client := newServer(t)
+			mux.HandleFunc("GET /gists/abc123", func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(`{"id":"abc123","files":{
+					".bucket":{"filename":".bucket","size":17},
+					"conf.json":{"filename":"conf.json","size":1229},
+					"notes/2026.md":{"filename":"notes/2026.md","size":812}}}`))
+			})
+			var stdout bytes.Buffer
+			if err := run(ctx, []string{"ls", tc.arg}, stubClient(client), strings.NewReader(""), &stdout, io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			if got := stdout.String(); got != tc.want {
+				t.Errorf("ls %s output:\n%q\nwant:\n%q", tc.arg, got, tc.want)
+			}
+		})
 	}
 }
