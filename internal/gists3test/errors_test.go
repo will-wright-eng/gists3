@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 func TestRateLimitError(t *testing.T) {

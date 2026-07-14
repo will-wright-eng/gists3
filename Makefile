@@ -35,8 +35,8 @@ test: ## hermetic unit tests
 race: ## unit tests with the race detector
 	go test -race ./...
 
-cover: ## library coverage; tests live in internal/gists3test, so -coverpkg names the packages under test
-	go test -cover -coverpkg=.,./internal/gistapi ./internal/gists3test
+cover: ## engine coverage; tests live in internal/gists3test, so -coverpkg names the packages under test
+	go test -cover -coverpkg=./internal/gists3,./internal/gistapi ./internal/gists3test
 
 cover-cli: ## g3 CLI coverage, kept separate so the library number stays honest
 	go test -cover ./cmd/g3

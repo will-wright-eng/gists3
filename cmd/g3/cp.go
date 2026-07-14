@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 // maxObjectBytes caps upload bodies at the backend's practical ceiling

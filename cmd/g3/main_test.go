@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 var ctx = context.Background()

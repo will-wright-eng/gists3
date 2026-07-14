@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 func TestPutObject(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 // lsBuckets prints one line per gist: created, id, visibility, object count

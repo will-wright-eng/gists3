@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 // gistJSON builds a gist response fixture holding the given files.

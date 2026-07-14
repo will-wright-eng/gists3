@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 // consistencyWindow bounds how long the tests wait out the gist backend's

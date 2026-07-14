@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 // clientFn is the seam between run and client construction; tests substitute

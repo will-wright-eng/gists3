@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/will-wright-eng/gists3"
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 func TestCreateBucket(t *testing.T) {

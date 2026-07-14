@@ -2,6 +2,10 @@
 // like the AWS SDK for Go v2 s3.Client: context-first methods, pointer Input
 // structs, pointer Output structs, typed errors.
 //
+// It is the internal engine of the g3 CLI — the module's product is the
+// binary, and this package deliberately has no public import path (see
+// docs/003-cli-first.md for the decision).
+//
 // It is a syntax-compatible facade, not a protocol implementation — no AWS
 // signatures, XML wire format, presigned URLs, or multipart uploads. A bucket
 // is a gist (addressed by its GitHub-assigned ID), a key is a filename within
