@@ -1,14 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"errors"
-	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/will-wright-eng/gists3/internal/gists3"
 )
 
 // setConfigDir points os.UserConfigDir at a temp dir across the Linux,
@@ -29,19 +30,14 @@ func setConfigDir(t *testing.T) string {
 	return dir
 }
 
-// writeConfig writes a config file at the temp config path. The mode is
-// applied with Chmod so the test is immune to umask.
-func writeConfig(t *testing.T, content string, mode os.FileMode) {
+// writeConfig writes a config file at the temp config path.
+func writeConfig(t *testing.T, content string) {
 	t.Helper()
 	dir := filepath.Join(setConfigDir(t), "gists3")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	p := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(p, []byte(content), mode); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(p, mode); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -54,100 +50,141 @@ func stubGH(t *testing.T, token string, err error) {
 	t.Cleanup(func() { ghAuthToken = orig })
 }
 
-func TestResolveConfigEnvWins(t *testing.T) {
-	writeConfig(t, `{"token":"cfg-token","base_url":"https://ghe.example/api/v3"}`, 0o600)
+// authServer returns a fake GitHub that records the Authorization header of
+// the last request, for asserting which identity layer won.
+func authServer(t *testing.T) (*httptest.Server, *string) {
+	t.Helper()
+	var auth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		w.Write([]byte(`{"id":"x","files":{}}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &auth
+}
+
+func TestResolveTokenEnvWins(t *testing.T) {
+	setConfigDir(t)
 	t.Setenv("GIST_TOKEN", "env-token")
 	stubGH(t, "", errors.New("must not be called"))
-	cfg, err := resolveConfig(io.Discard)
+	token, err := resolveToken()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != "env-token" {
-		t.Errorf("Token = %q, want the GIST_TOKEN value", cfg.Token)
-	}
-	if cfg.BaseURL != "" {
-		t.Errorf("BaseURL = %q; the config file must not be consulted when GIST_TOKEN supplies the identity", cfg.BaseURL)
+	if token != "env-token" {
+		t.Errorf("token = %q, want the GIST_TOKEN value", token)
 	}
 }
 
-func TestResolveConfigTrimsEnvToken(t *testing.T) {
+func TestResolveTokenTrimsEnv(t *testing.T) {
 	// CRLF env files yield "tok\r", which the HTTP client would reject
 	// opaquely; whitespace-only must behave as unset instead of shadowing
-	// the working layers below.
-	writeConfig(t, `{"token":"cfg-token"}`, 0o600)
-	stubGH(t, "", errors.New("unused"))
+	// the working gh login below.
+	setConfigDir(t)
+	stubGH(t, "gh-token", nil)
 	t.Setenv("GIST_TOKEN", "env-token\r\n")
-	cfg, err := resolveConfig(io.Discard)
+	token, err := resolveToken()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != "env-token" {
-		t.Errorf("Token = %q, want the trimmed value", cfg.Token)
+	if token != "env-token" {
+		t.Errorf("token = %q, want the trimmed value", token)
 	}
 	t.Setenv("GIST_TOKEN", " \n")
-	if cfg, err = resolveConfig(io.Discard); err != nil {
+	if token, err = resolveToken(); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != "cfg-token" {
-		t.Errorf("Token = %q; whitespace-only GIST_TOKEN must behave as unset", cfg.Token)
+	if token != "gh-token" {
+		t.Errorf("token = %q; whitespace-only GIST_TOKEN must behave as unset", token)
 	}
 }
 
-func TestResolveConfigFileBeatsGH(t *testing.T) {
-	writeConfig(t, `{"token":"cfg-token","base_url":"https://ghe.example/api/v3"}`, 0o600)
+func TestResolveTokenGHFallback(t *testing.T) {
+	setConfigDir(t)
 	stubGH(t, "gh-token", nil)
-	cfg, err := resolveConfig(io.Discard)
+	token, err := resolveToken()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != "cfg-token" || cfg.BaseURL != "https://ghe.example/api/v3" {
-		t.Errorf("cfg = %+v, want the config file's token and base_url", cfg)
+	if token != "gh-token" {
+		t.Errorf("token = %q, want the gh token", token)
 	}
 }
 
-func TestResolveConfigWarningsReachStderr(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission bits are synthetic on windows")
-	}
-	writeConfig(t, `{"token":"cfg-token"}`, 0o644)
-	var stderr bytes.Buffer
-	if _, err := resolveConfig(&stderr); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(stderr.String(), "chmod 600") {
-		t.Errorf("stderr = %q, want the permissions warning", stderr.String())
+func TestResolveTokenAllAbsent(t *testing.T) {
+	setConfigDir(t)
+	stubGH(t, "", errors.New("gh not authenticated"))
+	_, err := resolveToken()
+	if err == nil || !strings.Contains(err.Error(), "GIST_TOKEN") {
+		t.Errorf("err = %v, want an actionable message naming GIST_TOKEN", err)
 	}
 }
 
-func TestResolveConfigGHFallback(t *testing.T) {
-	setConfigDir(t) // no config file
-	stubGH(t, "gh-token", nil)
-	cfg, err := resolveConfig(io.Discard)
+func TestNewClientBaseURLAppliesWithEnvToken(t *testing.T) {
+	// The inversion of the pre-004 contract: GIST_TOKEN used to suppress the
+	// whole config file, base_url included. Identity and endpoint are now
+	// independent layers.
+	srv, auth := authServer(t)
+	writeConfig(t, `{"base_url":"`+srv.URL+`"}`)
+	t.Setenv("GIST_TOKEN", "env-token")
+	stubGH(t, "", errors.New("must not be called"))
+	client, err := newClient()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Token != "gh-token" {
-		t.Errorf("Token = %q, want the gh token", cfg.Token)
+	if _, err := client.HeadBucket(ctx, &gists3.HeadBucketInput{Bucket: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if *auth != "Bearer env-token" {
+		t.Errorf("Authorization = %q, want the GIST_TOKEN identity at the config base_url", *auth)
 	}
 }
 
-func TestResolveConfigMalformedIsFatal(t *testing.T) {
-	writeConfig(t, `{not json`, 0o600)
+func TestNewClientBaseURLAppliesWithGHToken(t *testing.T) {
+	srv, auth := authServer(t)
+	writeConfig(t, `{"base_url":"`+srv.URL+`"}`)
 	stubGH(t, "gh-token", nil)
-	if _, err := resolveConfig(io.Discard); err == nil {
-		t.Fatal("malformed config must be fatal, not fall through to gh")
+	client, err := newClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.HeadBucket(ctx, &gists3.HeadBucketInput{Bucket: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if *auth != "Bearer gh-token" {
+		t.Errorf("Authorization = %q, want the gh identity at the config base_url", *auth)
 	}
 }
 
-func TestResolveConfigTokenlessIsFatal(t *testing.T) {
-	writeConfig(t, `{"default_user":"octocat"}`, 0o600)
+func TestNewClientTokenlessConfigIsFine(t *testing.T) {
+	// The inversion of the pre-004 contract: a config file without a token
+	// used to be fatal. There is no token field left to be absent.
+	writeConfig(t, `{"default_user":"octocat"}`)
 	stubGH(t, "gh-token", nil)
-	if _, err := resolveConfig(io.Discard); err == nil {
-		t.Fatal("token-less config must be fatal, not fall through to gh")
+	if _, err := newClient(); err != nil {
+		t.Fatalf("token-less config must not be fatal: %v", err)
 	}
 }
 
-func TestResolveConfigNoConfigDir(t *testing.T) {
+func TestNewClientMalformedConfigIsFatal(t *testing.T) {
+	// Ignoring a malformed file would silently drop base_url and send the
+	// token to api.github.com instead of the configured host.
+	writeConfig(t, `{not json`)
+	stubGH(t, "gh-token", nil)
+	if _, err := newClient(); err == nil {
+		t.Fatal("malformed config must be fatal, not silently ignored")
+	}
+}
+
+func TestNewClientNoConfigFile(t *testing.T) {
+	setConfigDir(t)
+	stubGH(t, "gh-token", nil)
+	if _, err := newClient(); err != nil {
+		t.Fatalf("absent config must not be fatal: %v", err)
+	}
+}
+
+func TestNewClientNoConfigDir(t *testing.T) {
 	// With HOME/XDG_CONFIG_HOME/AppData all empty, os.UserConfigDir errors;
 	// the gh fallback must still be reachable (the pre-config stub worked
 	// without HOME, and a minimal container must keep working).
@@ -156,20 +193,7 @@ func TestResolveConfigNoConfigDir(t *testing.T) {
 	t.Setenv("AppData", "")
 	t.Setenv("GIST_TOKEN", "")
 	stubGH(t, "gh-token", nil)
-	cfg, err := resolveConfig(io.Discard)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Token != "gh-token" {
-		t.Errorf("Token = %q, want the gh token", cfg.Token)
-	}
-}
-
-func TestResolveConfigAllAbsent(t *testing.T) {
-	setConfigDir(t)
-	stubGH(t, "", errors.New("gh not authenticated"))
-	_, err := resolveConfig(io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "GIST_TOKEN") {
-		t.Errorf("err = %v, want an actionable message naming GIST_TOKEN", err)
+	if _, err := newClient(); err != nil {
+		t.Fatalf("unresolvable config dir must not be fatal: %v", err)
 	}
 }

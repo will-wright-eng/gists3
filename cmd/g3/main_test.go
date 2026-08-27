@@ -36,11 +36,11 @@ func unreachableClient() *gists3.Client {
 }
 
 func stubClient(client *gists3.Client) clientFn {
-	return func(io.Writer) (*gists3.Client, error) { return client, nil }
+	return func() (*gists3.Client, error) { return client, nil }
 }
 
 func failingClient(err error) clientFn {
-	return func(io.Writer) (*gists3.Client, error) { return nil, err }
+	return func() (*gists3.Client, error) { return nil, err }
 }
 
 // explodingStdin fails the test if anything reads it: stdin must only be

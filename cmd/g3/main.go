@@ -1,7 +1,8 @@
 // Command g3 is the gists3 CLI from the DESIGN.md roadmap, implementing cp
-// and ls. Credentials resolve from GIST_TOKEN, then the gists3 config file
-// (<user config dir>/gists3/config.json), then the gh CLI's stored token
-// (`gh auth token`); the full contract lives in docs/001-cp-command.md.
+// and ls. Credentials resolve from GIST_TOKEN, then the gh CLI's stored
+// token (`gh auth token`); the gists3 config file
+// (<user config dir>/gists3/config.json) supplies only base_url and
+// default_user. The full contract lives in docs/001-cp-command.md.
 package main
 
 import (
@@ -62,7 +63,7 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 		if err != nil {
 			return err
 		}
-		client, err := newClient(stderr)
+		client, err := newClient()
 		if err != nil {
 			return err
 		}
@@ -81,7 +82,7 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 				return usagef("%q: ls lists gists; want g3://<gist-id>[/<prefix>]", args[1])
 			}
 		}
-		client, err := newClient(stderr)
+		client, err := newClient()
 		if err != nil {
 			return err
 		}

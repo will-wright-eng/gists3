@@ -40,13 +40,12 @@ go install github.com/will-wright-eng/gists3/cmd/g3@latest
 `g3` needs a GitHub token with the `gist` scope, resolved in order:
 
 1. `GIST_TOKEN` environment variable
-2. the config file (below)
-3. `gh auth token` — if you use the GitHub CLI, `g3` just works
+2. `gh auth token` — if you use the GitHub CLI, `g3` just works
 
-The layer that supplies the token supplies the whole identity: with
-`GIST_TOKEN` set, the config file is not consulted, so its `base_url` does
-not apply — GitHub Enterprise users relying on `base_url` should unset
-`GIST_TOKEN`.
+The config file never holds a token: identity and endpoint are independent
+layers, so `base_url` applies whichever layer supplies the token. (Before
+v0.2 a plaintext `token` field was supported; it is ignored now — migrate
+with `gh auth login` or `GIST_TOKEN`.)
 
 ## Config file (optional)
 
@@ -57,13 +56,12 @@ Windows):
 ```json
 {
   "default_user": "octocat",
-  "token": "ghp_...",
   "base_url": ""
 }
 ```
 
-`base_url` targets GitHub Enterprise. Keep the file mode `0600` — the token
-is plaintext, and `g3` warns when other users can read it.
+`base_url` targets GitHub Enterprise. The file holds no secrets, so it is
+safe to commit to a dotfiles repo.
 
 ## The fine print
 

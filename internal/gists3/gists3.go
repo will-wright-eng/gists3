@@ -35,7 +35,7 @@ import (
 )
 
 // Client reads and writes gists through the GitHub REST API. Construct with
-// New, NewFromConfig, or NewFromDefaultConfig; the zero value is not usable.
+// New; the zero value is not usable.
 // Methods are safe for concurrent use, but writes to the same bucket are
 // last-write-wins at whole-gist granularity — the Gist API has no
 // compare-and-swap.
@@ -66,8 +66,8 @@ func WithBaseURL(u string) Option {
 }
 
 // New returns a Client authenticated with a GitHub personal access token
-// holding the gist scope. It never reads environment variables or files;
-// ambient configuration is opt-in via NewFromDefaultConfig.
+// holding the gist scope. It never reads environment variables or files —
+// credential resolution belongs to the caller.
 func New(token string, opts ...Option) *Client {
 	c := &Client{api: &gistapi.Client{
 		Token:      token,
