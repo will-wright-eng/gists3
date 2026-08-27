@@ -20,12 +20,24 @@ type Config struct {
 	// BaseURL overrides the API endpoint; empty means
 	// https://api.github.com.
 	BaseURL string `json:"base_url,omitempty"`
+
+	// Links maps link names to declarations; the CLI's link commands
+	// maintain the table (docs/004-linked-paths.md §4.1).
+	Links map[string]Link `json:"links,omitempty"`
 }
 
-// configPath resolves the per-OS config file location via os.UserConfigDir:
+// Link declares that a local path is the working copy of a remote key
+// (docs/004-linked-paths.md). Path is stored unexpanded, exactly as the
+// user typed it, so the config file stays portable across machines.
+type Link struct {
+	URI  string `json:"uri"`
+	Path string `json:"path"`
+}
+
+// ConfigPath resolves the per-OS config file location via os.UserConfigDir:
 // $XDG_CONFIG_HOME or ~/.config on Linux, ~/Library/Application Support on
 // macOS, %AppData% on Windows.
-func configPath() (string, error) {
+func ConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("gists3: resolve user config dir: %w", err)
@@ -39,7 +51,7 @@ func configPath() (string, error) {
 // Unknown keys — including a stale token field from a pre-v0.2 file — are
 // ignored.
 func LoadConfig() (*Config, error) {
-	p, err := configPath()
+	p, err := ConfigPath()
 	if err != nil {
 		return nil, err
 	}

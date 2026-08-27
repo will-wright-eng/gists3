@@ -34,13 +34,18 @@ func writeConfig(t *testing.T, content string) string {
 }
 
 func TestLoadConfig(t *testing.T) {
-	writeConfig(t, `{"default_user":"octocat","base_url":"https://ghe.example/api/v3"}`)
+	writeConfig(t, `{"default_user":"octocat","base_url":"https://ghe.example/api/v3",
+		"links":{"claude":{"uri":"g3://abc123/CLAUDE.md","path":"~/.claude/CLAUDE.md"}}}`)
 	cfg, err := gists3.LoadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.DefaultUser != "octocat" || cfg.BaseURL != "https://ghe.example/api/v3" {
 		t.Errorf("cfg = %+v", cfg)
+	}
+	want := gists3.Link{URI: "g3://abc123/CLAUDE.md", Path: "~/.claude/CLAUDE.md"}
+	if cfg.Links["claude"] != want {
+		t.Errorf("Links[claude] = %+v, want %+v", cfg.Links["claude"], want)
 	}
 }
 

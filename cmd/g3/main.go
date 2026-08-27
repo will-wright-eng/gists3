@@ -1,8 +1,9 @@
-// Command g3 is the gists3 CLI from the DESIGN.md roadmap, implementing cp
-// and ls. Credentials resolve from GIST_TOKEN, then the gh CLI's stored
-// token (`gh auth token`); the gists3 config file
-// (<user config dir>/gists3/config.json) supplies only base_url and
-// default_user. The full contract lives in docs/001-cp-command.md.
+// Command g3 is the gists3 CLI from the DESIGN.md roadmap, implementing cp,
+// ls, and the link commands. Credentials resolve from GIST_TOKEN, then the
+// gh CLI's stored token (`gh auth token`); the gists3 config file
+// (<user config dir>/gists3/config.json) supplies base_url, default_user,
+// and the link table. The contracts live in docs/001-cp-command.md and
+// docs/004-linked-paths.md.
 package main
 
 import (
@@ -23,7 +24,15 @@ commands:
                              not supported — there is no --recursive yet.
   ls [g3://<gist-id>[/<prefix>]]
                              list buckets (gists) the token can see, or one
-                             bucket's objects, optionally prefix-filtered`
+                             bucket's objects, optionally prefix-filtered
+  link add <name> g3://<gist-id>/<key> <path>
+                             declare that <path> is the working copy of a
+                             gist key; no network, nothing is copied
+  link ls                    list declared links
+  link rm <name>             remove a declaration; keeps both the gist and
+                             the local file
+  path <name>                print a link's local path, ~ expanded, for
+                             $(g3 path <name>) interpolation`
 
 // usageError marks a command-line mistake: main exits 2 for these and 1 for
 // every runtime failure.
@@ -90,6 +99,34 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 			return lsObjects(ctx, client, loc, stdout)
 		}
 		return lsBuckets(ctx, client, stdout)
+	case "link":
+		if len(args) < 2 {
+			return usagef("link needs a subcommand: add, ls, or rm\n%s", usage)
+		}
+		switch args[1] {
+		case "add":
+			if len(args) != 5 {
+				return usagef("link add takes a name, a g3://<gist-id>/<key> URI, and a local path\n%s", usage)
+			}
+			return linkAdd(args[2], args[3], args[4], stdout)
+		case "ls":
+			if len(args) != 2 {
+				return usagef("link ls takes no arguments\n%s", usage)
+			}
+			return linkLS(stdout)
+		case "rm":
+			if len(args) != 3 {
+				return usagef("link rm takes exactly a link name\n%s", usage)
+			}
+			return linkRM(args[2], stdout)
+		default:
+			return usagef("unknown link subcommand %q; want add, ls, or rm\n%s", args[1], usage)
+		}
+	case "path":
+		if len(args) != 2 {
+			return usagef("path takes exactly a link name\n%s", usage)
+		}
+		return linkPath(args[1], stdout)
 	default:
 		return usagef("unknown command %q\n%s", args[0], usage)
 	}

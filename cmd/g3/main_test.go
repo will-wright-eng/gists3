@@ -76,6 +76,13 @@ func TestRunUsageErrors(t *testing.T) {
 		"stdin to prefix":      {"cp", "-", "g3://abc123/x/"},
 		"empty gist id":        {"cp", "g3:///k", "out.txt"},
 		"foreign scheme":       {"cp", "s3://b/k", "out.txt"},
+		"link no subcommand":   {"link"},
+		"link unknown sub":     {"link", "mv", "x"},
+		"link add arity":       {"link", "add", "n", "g3://b/k"},
+		"link ls with arg":     {"link", "ls", "x"},
+		"link rm arity":        {"link", "rm"},
+		"path no name":         {"path"},
+		"path two names":       {"path", "a", "b"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := run(ctx, args, failingClient(creds), strings.NewReader(""), io.Discard, io.Discard)
