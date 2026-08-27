@@ -32,7 +32,9 @@ commands:
   link rm <name>             remove a declaration; keeps both the gist and
                              the local file
   path <name>                print a link's local path, ~ expanded, for
-                             $(g3 path <name>) interpolation`
+                             $(g3 path <name>) interpolation
+  status [<name>]            report each link's sync state against the last
+                             agreed baseline (docs/004-linked-paths.md §5)`
 
 // usageError marks a command-line mistake: main exits 2 for these and 1 for
 // every runtime failure.
@@ -127,6 +129,15 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 			return usagef("path takes exactly a link name\n%s", usage)
 		}
 		return linkPath(args[1], stdout)
+	case "status":
+		if len(args) > 2 {
+			return usagef("status takes at most one link name\n%s", usage)
+		}
+		name := ""
+		if len(args) == 2 {
+			name = args[1]
+		}
+		return cmdStatus(ctx, newClient, name, stdout)
 	default:
 		return usagef("unknown command %q\n%s", args[0], usage)
 	}

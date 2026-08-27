@@ -83,6 +83,7 @@ func TestRunUsageErrors(t *testing.T) {
 		"link rm arity":        {"link", "rm"},
 		"path no name":         {"path"},
 		"path two names":       {"path", "a", "b"},
+		"status two names":     {"status", "a", "b"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := run(ctx, args, failingClient(creds), strings.NewReader(""), io.Discard, io.Discard)

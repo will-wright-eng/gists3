@@ -92,8 +92,25 @@ func linkRM(name string, stdout io.Writer) error {
 	if err := saveLinks(cfg.Links); err != nil {
 		return err
 	}
+	if err := dropBaseline(name); err != nil {
+		return fmt.Errorf("declaration removed, but baseline cleanup failed: %w", err)
+	}
 	fmt.Fprintf(stdout, "unlinked: %s\n  kept %s\n  kept %s\n", name, l.Path, l.URI)
 	return nil
+}
+
+// dropBaseline removes a link's baseline, writing state.json only when there
+// is something to remove — link rm must not create the file.
+func dropBaseline(name string) error {
+	st, err := loadState()
+	if err != nil {
+		return err
+	}
+	if _, ok := st.Baselines[name]; !ok {
+		return nil
+	}
+	delete(st.Baselines, name)
+	return saveState(st)
 }
 
 // linkPath prints the expanded absolute path and nothing else, so
