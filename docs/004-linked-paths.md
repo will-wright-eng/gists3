@@ -1,7 +1,8 @@
 # 004 — Linked paths: `pull`, `push`, `status`
 
-**Status:** Draft v0.1 (2026-08-26)
-**Scope:** `cmd/g3` only — no engine changes, no new module dependencies
+**Status:** Draft v0.2 (2026-08-26)
+**Scope:** `cmd/g3`, plus removal of config-file token auth from
+`internal/gists3` (§8); no new module dependencies
 **Depends on:** [003-cli-first.md](003-cli-first.md) (CLI verbs need not be S3
 verbs), [001-cp-command.md](001-cp-command.md) (URI grammar, exit codes, seams)
 
@@ -37,9 +38,10 @@ No ID, no scratch file, no `mv` — the file is edited where it lives. `g3 path`
 is deliberately a plain path on stdout rather than an `edit` subcommand, so it
 composes with any editor, pager, or diff tool.
 
-Everything here is composition over existing engine operations — `GetObject`,
-`PutObject` — plus two new files under the config directory. `internal/gists3`
-does not change.
+The command surface is composition over existing engine operations —
+`GetObject`, `PutObject` — plus a `links` section in the config file and one
+new state file. The single engine change is a subtraction: config-file token
+auth goes away (§8), which is what lets links live in `config.json` at all.
 
 ---
 
@@ -56,11 +58,13 @@ So a link is not just an address book entry. It is an address book entry plus a
 **baseline** — a record of what both sides last agreed on — and the baseline is
 what makes `pull`/`push` safe enough to be worth having.
 
-**What this cannot be.** The backend has no compare-and-swap ([000-design.md]
-(000-design.md) §5.4: *last write wins*), so there is a TOCTOU window between
+**What this cannot be.** The backend has no compare-and-swap
+([000-design.md](000-design.md) §5.4: *last write wins*; §9 lists conditional
+writes as an unproven v1.2 investigation), so there is a TOCTOU window between
 the check and the write. The baseline converts a silent clobber into a refused
-command; it does not make the write atomic. `WithRetry`-style conditional
-writes remain roadmap WP6.
+command; it does not make the write atomic. Conditional writes remain roadmap
+WP6 — a different item from WP4's `WithRetry`, which is retry policy, not
+compare-and-swap.
 
 ---
 
@@ -80,42 +84,47 @@ Names match `[A-Za-z0-9._-]+`. That excludes `/`, `:` and a leading `@`, so a
 name can never be confused with a path or a `g3://` URI, and leaves `@name`
 free as a future sigil for links inside `cp`.
 
-**Exit codes.** 0/1/2 keep their meanings from 001 §5. One addition:
+**Streams** follow 001 §4.5 unchanged: status lines and command data go to
+**stdout**, every diagnostic to **stderr**. Stdout purity is load-bearing for
+`$(g3 path claude)` exactly as it is for `g3 cp g3://b/k -`.
+
+**Exit codes** stay the three 001 §4.5 defines — no new code:
 
 | Code | Meaning |
 |---|---|
-| 0 | success (including "already in sync") |
-| 1 | runtime failure — network, API, filesystem |
+| 0 | success, including "already in sync" |
+| 1 | runtime failure — network, API, filesystem, **and refused directions** |
 | 2 | usage error — bad arity, unknown link, malformed URI |
-| **3** | **refused: the requested direction would destroy data** |
 
-3 is defined now rather than later on purpose. Folding refusals into 1 and
-splitting them out afterwards would be a breaking change for anyone scripting
-against it; the cost today is one `errors.As` arm in `main()`.
+A refused `pull`/`push` is an exit-1 runtime failure, not its own code. That
+follows the precedent already in 001 §4.5, which puts "guard rejections (§4.6)"
+— the UTF-8 and size refusals, refusals in exactly this sense — at 1. Scripts
+distinguish a refusal from a network failure by reading stderr; giving them a
+dedicated code is deferred (§12) rather than spent here.
 
 ---
 
 ## 4. Files on disk
 
-Three files under `<user config dir>/gists3/`, split by lifecycle. The
-question that separates them is *"can this be committed to a dotfiles repo?"*
-— and each has a different answer.
+Two files under `<user config dir>/gists3/`, split by the question *"can this
+be committed to a dotfiles repo?"*:
 
 | File | Content | Owner | Shareable |
 |---|---|---|---|
-| `config.json` | token, `base_url` | user | **no** — plaintext secret (and deprecated, §8) |
-| `links.json` | link declarations | user, hand-editable | **yes** — that is the point |
+| `config.json` | `default_user`, `base_url`, `links` | user, hand-editable | **yes** — nothing secret in it once §8 lands |
 | `state.json` | baseline hashes | `g3`, never hand-edited | **no** — describes this machine |
 
-Links get their own file precisely because `config.json` cannot leave a
-machine. A link table that could not be carried between machines would defeat
-the feature.
+Links belong in `config.json` because §8 removes the only thing that ever made
+that file unshareable. What cannot join them is `state.json`: a baseline
+describes the working copy on one machine, so carrying it to another would
+assert agreement that was never established there.
 
-### 4.1 `links.json`
+### 4.1 `config.json`
 
 ```json
 {
-  "version": 1,
+  "default_user": "octocat",
+  "base_url": "",
   "links": {
     "claude": {
       "uri": "g3://b1e652a05136107f461cd796103508cc/CLAUDE.md",
@@ -125,9 +134,9 @@ the feature.
 }
 ```
 
-`version` is an integer; `g3` refuses a file whose version it does not know
-rather than guessing. Paths are stored **unexpanded** so the file stays
-portable across machines and users.
+`links` is an addition to the existing schema, so the file keeps its current
+shape and stays readable by a `g3` that predates this document. Paths are
+stored **unexpanded** so the file stays portable across machines and users.
 
 ### 4.2 `state.json`
 
@@ -139,6 +148,11 @@ portable across machines and users.
   }
 }
 ```
+
+A new file, so it carries a version from the start; `g3` refuses a version it
+does not know rather than guessing. `config.json` gets no version field —
+it has none today, and requiring one would break exactly the older binaries
+the additive `links` key is designed not to disturb.
 
 `hash` is the hex SHA-256 the engine already computes as
 `GetObjectOutput.ETag` (`operations.go:196`), so local and remote hashes are
@@ -152,10 +166,15 @@ clobber (§5).
 ### 4.3 Writing
 
 Both files are written mode `0600` via temp-file + `os.Rename` in the same
-directory. Neither holds a secret, but `0600` matches the directory's existing
-posture and costs nothing. Unknown top-level keys are preserved across a
-rewrite — decode into `map[string]json.RawMessage`, not straight into the
-struct, so a field written by a newer `g3` survives an older one.
+directory. Neither holds a secret once §8 lands — `0600` is simply the
+directory's existing posture, and widening it buys nothing.
+
+**Unknown-key preservation is now load-bearing**, not merely polite:
+`link add` and `link rm` rewrite a file that also holds the user's
+`default_user` and `base_url`, and may hold fields written by a newer `g3`.
+Decode into `map[string]json.RawMessage`, edit the `links` key, re-encode —
+never round-trip through the `Config` struct, which would silently drop
+everything it does not know about.
 
 ---
 
@@ -170,8 +189,9 @@ Three hashes:
 | `B` | the baseline — `L == R` as of the last successful pull/push |
 
 Content hashing, not mtime: editors rewrite files, restore from backups, and
-touch mtimes without changing bytes. Objects are sub-1 MB by contract, so
-hashing is free.
+touch mtimes without changing bytes. Bodies are capped at 10 MiB by `cp`'s
+upload guard (001 §4.6) with <1 MB the documented comfort zone, so hashing
+costs nothing worth measuring.
 
 ### 5.1 Resolution
 
@@ -179,14 +199,23 @@ Evaluated top to bottom; the first matching row wins.
 
 | # | Condition | State | `pull` | `push` |
 |---|---|---|---|---|
-| 1 | local missing, remote missing | — | error (2) | error (2) |
-| 2 | local missing | `local-missing` | ✅ creates | refuse (3) |
-| 3 | remote key missing | `remote-missing` | refuse (3) | ✅ creates |
+| 1 | local missing, remote missing | — | error (1) | error (1) |
+| 2 | local missing | `local-missing` | ✅ creates | refuse (1) |
+| 3 | remote key missing | `remote-missing` | refuse (1) | ✅ creates |
 | 4 | `L == R` | `in-sync` | no-op | no-op |
-| 5 | `B` absent | `diverged` | refuse (3) | refuse (3) |
-| 6 | `B == L` | `remote-ahead` | ✅ | refuse (3) |
-| 7 | `B == R` | `local-ahead` | refuse (3) | ✅ |
-| 8 | otherwise | `diverged` | refuse (3) | refuse (3) |
+| 5 | `B` absent | `diverged` | refuse (1) | refuse (1) |
+| 6 | `B == L` | `remote-ahead` | ✅ | refuse (1) |
+| 7 | `B == R` | `local-ahead` | refuse (1) | ✅ |
+| 8 | otherwise | `diverged` | refuse (1) | refuse (1) |
+
+**Row 3 also absorbs a dead bucket.** `GetObject` reports both "this gist is
+gone" and "this gist has no such file" as `*NotFoundError`, distinguished only
+by whether `Key` is empty (`operations.go:202-203`). The table does not split
+them: a vanished gist is labelled `remote-missing`, and `push` against it fails
+with the API's own not-found error rather than a state the tool predicted. The
+cost is a status line that reads as if `push` would fix a gist that no longer
+exists; the saving is one state and one branch. Re-point or drop such a link
+with `g3 link rm`.
 
 **Row 4 is the load-bearing one.** `L == R` means in sync *regardless of what
 the baseline says or whether one exists* — and it adopts `L` as the new
@@ -277,13 +306,21 @@ remote-missing new      ~/new.md
 ```
 
 States are the hyphenated labels from §5.1 — greppable, fixed vocabulary.
-`status` is a report: it exits 0 whatever it finds, and exits 1 only when it
-cannot reach the API. Any baseline it adopts under row 4 is persisted.
+`status` exits 0 whatever states it finds; only a failure to complete the
+report is an error.
+
+**Errors abort the report.** `NotFoundError` is already absorbed as
+`remote-missing` (§5.1), so anything else reaching `status` — `RateLimitError`,
+`APIError`, a network failure — is a global condition rather than a property of
+one link: if link 3 of 5 hits the rate limit, links 4 and 5 will too. `status`
+prints the rows it completed, writes the error to stderr, and exits 1, instead
+of repeating one global failure once per remaining row. Any baseline adopted
+under row 4 before the abort is still persisted.
 
 ### `g3 pull <name>` / `g3 push <name>`
 
-Resolve state per §5.1, then act or refuse. Confirmation lines follow `cp`'s
-aws-cli voice:
+Resolve state per §5.1, then act or refuse. Confirmation lines go to stdout in
+`cp`'s aws-cli voice (001 §4.5):
 
 ```
 pull: g3://b1e652…/CLAUDE.md to ~/.claude/CLAUDE.md
@@ -291,7 +328,7 @@ push: ~/.claude/CLAUDE.md to g3://b1e652…/CLAUDE.md
 in-sync: claude
 ```
 
-A refusal names the state and the way out:
+A refusal goes to stderr, names the state and the way out, and exits 1:
 
 ```
 g3: refused: claude is diverged — local and remote both changed since the last sync.
@@ -306,8 +343,17 @@ read-back would poison the baseline with stale content and manufacture a phantom
 
 `pull` writes with `os.WriteFile`, matching `cp`'s existing download path
 (`cp.go:138`) — created files land `0644`, existing files keep their mode.
-Parent directories are created. `push` inherits every `PutObject` contract
-unchanged: empty bodies refused, UTF-8 only, reserved `gistfile` keys rejected.
+Parent directories are created.
+
+`push` reads the local file through `cp`'s `readBody` (`cp.go:92-104`) before
+calling `PutObject`, so it inherits the 10 MiB cap and the UTF-8 check that
+001 §4.6 specifies for uploads. That reuse is deliberate: routing straight to
+`PutObject` would let `g3 push` upload a binary file that `g3 cp` refuses —
+the same bytes to the same destination, answered differently depending on which
+command was typed — and 001 §5 records that non-UTF-8 content is *corrupted
+silently* by JSON-string storage rather than merely rejected. Guard rejections
+exit 1, per 001 §4.5. From `PutObject` itself, `push` inherits empty-body
+rejection and the reserved-`gistfile*`-key rule (`operations.go:406-414`).
 
 ### `g3 path <name>`
 
@@ -330,41 +376,65 @@ does not check that the file exists; `status` is for that. Unknown name exits 2.
 
 ---
 
-## 8. Deprecating the `config.json` token
+## 8. Removing config-file token auth
 
-**`gh auth token` is the primary credential path.** `GIST_TOKEN` stays for CI.
-The plaintext `token` field in `config.json` is **deprecated** as of this
-document: it stores a secret at rest, forces the file to `0600`, and makes the
-one file a user might otherwise share unshareable.
+**`gh auth token` is the primary credential path**, with `GIST_TOKEN` for CI.
+The plaintext `token` field in `config.json` is **removed outright** — not
+deprecated through a release. Carrying it any longer would mean shipping links
+inside a file that cannot be shared, which is the one property that makes a
+link table worth having.
 
-v1 keeps reading it — no behavior change — and adds one stderr line when the
-field is present:
+This is a breaking change for anyone whose identity came from the config file.
+The migration is `gh auth login`, or exporting `GIST_TOKEN`.
 
+### 8.1 What goes
+
+`Config` keeps only what is not a secret:
+
+```go
+type Config struct {
+    DefaultUser string `json:"default_user"`
+    BaseURL     string `json:"base_url,omitempty"`
+    Links       map[string]Link `json:"links,omitempty"`
+}
 ```
-g3: warning: config.json "token" is deprecated; use gh auth login or GIST_TOKEN
-```
 
-`base_url` is not a secret and is unaffected; if `config.json` is eventually
-retired entirely, `base_url` moves rather than disappears.
+- **`Config.Token`** and `LoadConfig`'s `token is required` error
+  (`config.go:61-63`).
+- **`NewFromConfig` and `NewFromDefaultConfig`** (`config.go:74-94`). With no
+  token in the file, a config-shaped constructor has nothing left to construct
+  from; `cmd/g3` calls `gists3.New(token, gists3.WithBaseURL(cfg.BaseURL))`
+  directly. 000 §5.6.1's "opt-in, never ambient" rule loses its subject rather
+  than being violated — with no token in the file, nothing ambient reaches the
+  engine at all.
+- **`Config.Warnings` and the `0600` permission warning** (`config.go:27-29`,
+  `64-70`), which existed solely to protect a plaintext token at rest.
 
-### 8.1 Two bugs the split avoids
+### 8.2 Two bugs that cease to exist
 
-Both are live today and are the reason links do **not** go in `config.json`.
-Both should be fixed as part of the deprecation regardless of this feature.
+Neither needs fixing, because the removal deletes the conditions that produce
+them. Both were the original reason to keep links out of `config.json`.
 
-1. **`GIST_TOKEN` suppresses the whole file.** `resolveConfig`
-   (`client.go:45-47`) returns on the env token before `LoadConfig` runs, and
-   `client_test.go:69` asserts it as a contract. Links stored there would
-   silently vanish — not error, just be absent — for every user with
-   `GIST_TOKEN` exported. **Links must load independently of the identity
-   chain**, which they do by construction once they live in `links.json`.
+1. **`GIST_TOKEN` suppressed the whole file.** `resolveConfig`
+   (`client.go:45-47`) returned on the env token before `LoadConfig` ran, so
+   anything else in the file — including `base_url` — was ignored;
+   `client_test.go:69` asserts exactly that. Once the file no longer supplies
+   identity, there is no identity layering to short-circuit, and `base_url`
+   applies unconditionally. **That is a behavior change**: the README currently
+   documents the opposite ("with `GIST_TOKEN` set… its `base_url` does not
+   apply — GitHub Enterprise users relying on `base_url` should unset
+   `GIST_TOKEN`"), and needs updating.
 
-2. **A token-less `config.json` is fatal.** `LoadConfig` errors with
-   `token is required` (`config.go:62`) and `resolveConfig` returns any
-   non-`fs.ErrNotExist` error (`client.go:56-57`), so it never falls through to
-   `gh`. A `gh`-authenticated user who writes a config file for any non-token
-   reason bricks the binary. Deprecating the field means an absent token must
-   become a fall-through, not an error.
+2. **A token-less `config.json` was fatal.** `LoadConfig` errored with
+   `token is required` and `resolveConfig` returned any non-`fs.ErrNotExist`
+   error (`client.go:56-57`), so a `gh`-authenticated user who wrote a config
+   file for any other reason bricked the binary. There is no token field left
+   to be absent.
+
+Two contract tests assert the removed behavior and invert:
+`TestLoadConfigMissingToken` (`internal/gists3test/config_test.go:56`) and the
+`"token-less config must be fatal, not fall through to gh"` case
+(`cmd/g3/client_test.go:146`).
 
 ---
 
@@ -373,24 +443,31 @@ Both should be fixed as part of the deprecation regardless of this feature.
 Each stage is one commit, lands green (`make check` plus its own tests), and
 leaves the binary usable.
 
-### Stage 1 — `links.json` and the `link` command set
+### Stage 1 — remove config-file token auth
 
-Schema, load/save with unknown-key preservation, `link add|ls|rm`, name and
-path validation, `~` expansion. No network, no engine calls.
+All of §8: shrink `Config`, delete the `...FromConfig` constructors and the
+warning mechanism, rewrite `resolveConfig` to `GIST_TOKEN` → `gh auth token`
+with the file consulted only for `base_url`/`default_user`, invert the two
+contract tests, update the README auth section.
 
-*Done when:* a link can be declared, listed, and removed across processes.
+First because it reshapes `Config`, which every later stage extends.
 
-### Stage 2 — `g3 path`
+*Done when:* identity resolves from `gh` with no `config.json` present, and
+`base_url` applies with `GIST_TOKEN` set.
 
-Reads stage 1's file, prints one line. Small enough to ride along with stage 1
-if that reads better as a single commit.
+### Stage 2 — `links` in `config.json`, the `link` command set, and `g3 path`
 
-*Done when:* `vim $(g3 path claude)` opens the right file.
+Schema addition, load/save with unknown-key preservation, `link add|ls|rm`,
+name and path validation, `~` expansion, `g3 path`. No network, no engine calls.
+
+*Done when:* a link survives a round trip through the file and
+`vim $(g3 path claude)` opens the right file — with `default_user` and
+`base_url` untouched by the rewrite.
 
 ### Stage 3 — `state.json` and `g3 status`
 
 Baseline load/save, `hashLocal`/`hashRemote`, the §5.1 resolution table as a
-pure function, `status` output, row-4 baseline adoption.
+pure function, `status` output, row-4 baseline adoption, abort-on-error.
 
 The resolution table is the thing to get right, and it is pure — `(L, R, B) →
 state`, no I/O — so it gets an exhaustive table test.
@@ -399,16 +476,16 @@ state`, no I/O — so it gets an exhaustive table test.
 
 ### Stage 4 — `pull` and `push`
 
-The acting half: refuse per the table with exit 3, otherwise transfer and write
-the baseline from the transferred bytes.
+The acting half: refuse per the table with exit 1, otherwise transfer and write
+the baseline from the transferred bytes. `push` routes through `readBody`.
 
 *Done when:* the §11 lifecycle passes against the `httptest` fake.
 
-### Stage 5 — deprecation, docs, integration
+### Stage 5 — docs and integration
 
-The §8 warning and the token fall-through fix; README section; a tagged
-integration test driving the compiled binary through the live lifecycle;
-roadmap conformance table updated.
+README link section; a tagged integration test driving the compiled binary
+through the live lifecycle; roadmap conformance table updated, including WP2's
+status now that `token_command` has no `token` field to improve on.
 
 ---
 
@@ -416,8 +493,8 @@ roadmap conformance table updated.
 
 | Layer | Stages | Network |
 |---|---|---|
-| Pure: `~` expansion, name validation, §5.1 resolution | 1, 3 | none |
-| File round-trip vs temp config dir | 1, 3 | none |
+| Pure: `~` expansion, name validation, §5.1 resolution | 2, 3 | none |
+| Config round-trip vs temp config dir, unknown-key preservation | 1, 2, 3 | none |
 | Command funcs vs `httptest` fake | 3, 4 | loopback |
 | Compiled binary vs live API (tagged) | 5 | live, self-cleaning |
 
@@ -434,12 +511,15 @@ package-level seam.
       `vim $(g3 path claude)` then `g3 push claude` — the original four-command
       workflow, minus the ID, the scratch file, and the `mv`.
 - [ ] Every state in §5.1 is reachable and correctly labeled by `status`.
-- [ ] A refused `pull`/`push` exits 3, changes nothing on either side, and
+- [ ] A refused `pull`/`push` exits 1, changes nothing on either side, and
       names the recovery path.
 - [ ] Reconciling a diverged link with `g3 cp` restores `in-sync` on the next
       `status` with no repair command (§5.2).
-- [ ] Links resolve identically with `GIST_TOKEN` set, unset, and with no
-      `config.json` at all.
+- [ ] `link add` on a config file holding `default_user` and `base_url` leaves
+      both intact.
+- [ ] Identity resolves with `GIST_TOKEN` set, unset, and with no `config.json`
+      at all; `base_url` applies in every case.
+- [ ] `push` refuses a non-UTF-8 file with the same error `cp` gives.
 - [ ] `link rm` leaves both the gist and the local file in place.
 - [ ] `make check` green at every stage; zero new module dependencies.
 
@@ -456,6 +536,8 @@ Genuinely deferred:
 | Item | Blocked on / note |
 |---|---|
 | `g3 edit <name>` | `g3 path` piped into an editor covers it; revisit only if the pipe chafes |
+| A distinct exit code for refusals | Would break 001 §4.5's 0/1/2 contract; revisit if scripts need it without parsing stderr (§3) |
+| A `bucket-missing` state | Row 3 absorbs a dead gist today (§5.1); split it if the misleading status line proves annoying |
 | Resolving links by path (`g3 push ~/.zshrc`) | Wanted for tab-completion; needs a name-vs-path disambiguation rule |
 | Symlink-aware writes, atomic rename, mode preservation | Interacts: `EvalSymlinks` + temp-rename preserves the symlink but drops the mode, which `os.WriteFile` currently keeps for free (§7) |
 | Directory ⟷ bucket mounts | Drags in delete propagation, per-file state, partial-failure semantics — its own document |
@@ -468,18 +550,21 @@ Genuinely deferred:
 ## 13. References
 
 - [000-design.md](000-design.md) — §5.4 (behavioral contracts: last write wins,
-  eventual consistency), §5.6 (config file), §6.1 (flat namespace), §10
-  decision #5 (eventual consistency observed live)
-- [001-cp-command.md](001-cp-command.md) — URI grammar, exit codes, testability
-  seams
-- [001-roadmap.md](001-roadmap.md) — WP6 (conditional writes, the only real fix
-  for the §2 TOCTOU window)
+  `HeadObject` cost), §5.6 (config file, and §5.6.1's "opt-in, never ambient"
+  rule that §8 retires), §6.1 (flat namespace), §9 (conditional writes as a
+  v1.2 investigation), §10 decision #5 (eventual consistency observed live)
+- [001-cp-command.md](001-cp-command.md) — §4.5 (status output, streams, and
+  the 0/1/2 exit-code taxonomy), §4.6 (upload guards), §5 (divergences,
+  including silent corruption of non-UTF-8 bodies)
+- [001-roadmap.md](001-roadmap.md) — WP2 (`token_command`, obsoleted by §8),
+  WP6 (conditional writes, the only real fix for the §2 TOCTOU window)
 - [003-cli-first.md](003-cli-first.md) — the CLI is the product; S3 vocabulary
   binds the engine, the command surface is only aws-cli *flavored*
 - Source: [`cmd/g3/client.go`](../cmd/g3/client.go) (identity chain),
-  [`cmd/g3/cp.go`](../cmd/g3/cp.go) (download/upload paths),
-  [`internal/gists3/operations.go`](../internal/gists3/operations.go)
-  (`GetObject` ETag, `HeadObject` cost warning)
+  [`cmd/g3/cp.go`](../cmd/g3/cp.go) (`readBody` guards, download path),
+  [`internal/gists3/config.go`](../internal/gists3/config.go) (the file §8
+  shrinks), [`internal/gists3/operations.go`](../internal/gists3/operations.go)
+  (`GetObject` ETag and not-found shapes, `HeadObject` cost warning)
 - `aws s3 sync` — the verb this deliberately does not implement —
   <https://docs.aws.amazon.com/cli/latest/reference/s3/sync.html>
 - GitHub Gist REST API — <https://docs.github.com/en/rest/gists/gists>
