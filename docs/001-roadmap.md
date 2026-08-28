@@ -22,13 +22,13 @@ those get recorded as amendments, not reverted.
 | §5.2 method surface (10 methods) | ✅ Complete, tested (37 unit tests, 85% coverage) |
 | §5.3 error model | ✅ Complete (`NotFoundError`, `RateLimitError`, `APIError`, sentinels) |
 | §5.4 behavioral contracts | ✅ Complete, incl. the 422-disambiguation and truncation contracts |
-| §5.6 config file | ✅ Complete except `token_command` (v1.1, WP2) |
+| §5.6 config file | ⚠️ Amended by [004-linked-paths.md](004-linked-paths.md) §8 *(2026-08-27)*: the plaintext `token` field is removed — identity resolves from `GIST_TOKEN` or `gh auth token` only — and the file gained `links` |
 | §4.1 zero dependencies | ✅ `go.mod` has no requires |
 | §7 testing strategy | ✅ Hermetic unit suite + tagged integration suite + example smoke test |
 | §3 directory structure | ⚠️ Code is *better* than the design; 000-design.md is stale (WP8) |
-| §9 v1.1 items (base64, retry, token_command) | ❌ Not started (WP2–WP4) |
+| §9 v1.1 items (base64, retry) | ❌ Not started (WP3–WP4); `token_command` (WP2) is obsolete — 004 §8 left no token field for it to improve on |
 | §9 v1.2 items (VersionID, conditional writes) | ❌ Not started (WP5–WP6) |
-| §9 v2 CLI (`cmd/g3`) | ⚠️ Stub only: `ls` works, `--help` errors, no config identity, no `cp`/`rm`, no `g3://` URIs (WP1) |
+| §9 v2 CLI (`cmd/g3`) | ⚠️ `cp`, `ls`, `g3://` URIs, and the [004](004-linked-paths.md) link set (`link`, `status`, `pull`, `push`, `path`) shipped *(2026-08-27)*; `rm` and `--help` remain (WP1) |
 | §8 encryption example | ❌ Not written (WP7) |
 
 ## 3. Design amendments (code wins, 000-design.md updates)
@@ -120,6 +120,12 @@ test). One integration-tagged test drives the compiled binary end to end.
   config and `ls` labels output with `default_user`.
 
 ### WP2 — `token_command` config field (v1.1, §5.6.4)
+
+**Obsolete** *(2026-08-27)*: [004-linked-paths.md](004-linked-paths.md) §8
+removed config-file token auth outright — identity resolves from `GIST_TOKEN`
+or `gh auth token`, and the config file holds no credential for
+`token_command` to improve on. The spec below is kept for the record; do not
+build it.
 
 A safer alternative to the plaintext `token` field: the config names a
 command whose stdout is the token (e.g. `pass show github/gists3`).

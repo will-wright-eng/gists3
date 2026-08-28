@@ -5,34 +5,39 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // Config is the opt-in file configuration for CLI use and quick scripts. It
-// enters a program only through the explicitly named ...FromConfig
-// constructors — New never touches the filesystem.
+// carries no credentials — identity is resolved by the caller (cmd/g3 uses
+// GIST_TOKEN, then the gh CLI) — so the file is safe to share, e.g. in a
+// dotfiles repo.
 type Config struct {
 	// DefaultUser is informational in v1: the token alone determines API
 	// identity. It lets tooling label output and reserves room for
 	// multi-profile support without a schema break.
 	DefaultUser string `json:"default_user"`
 
-	// Token is a GitHub personal access token with the gist scope.
-	Token string `json:"token,omitempty"`
-
 	// BaseURL overrides the API endpoint; empty means
 	// https://api.github.com.
 	BaseURL string `json:"base_url,omitempty"`
 
-	// Warnings collects non-fatal findings from LoadConfig, e.g. a config
-	// file readable by other users. Never persisted.
-	Warnings []string `json:"-"`
+	// Links maps link names to declarations; the CLI's link commands
+	// maintain the table (docs/004-linked-paths.md §4.1).
+	Links map[string]Link `json:"links,omitempty"`
 }
 
-// configPath resolves the per-OS config file location via os.UserConfigDir:
+// Link declares that a local path is the working copy of a remote key
+// (docs/004-linked-paths.md). Path is stored unexpanded, exactly as the
+// user typed it, so the config file stays portable across machines.
+type Link struct {
+	URI  string `json:"uri"`
+	Path string `json:"path"`
+}
+
+// ConfigPath resolves the per-OS config file location via os.UserConfigDir:
 // $XDG_CONFIG_HOME or ~/.config on Linux, ~/Library/Application Support on
 // macOS, %AppData% on Windows.
-func configPath() (string, error) {
+func ConfigPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("gists3: resolve user config dir: %w", err)
@@ -40,13 +45,13 @@ func configPath() (string, error) {
 	return filepath.Join(dir, "gists3", "config.json"), nil
 }
 
-// LoadConfig reads and validates the config file at the default per-OS path
-// (<user config dir>/gists3/config.json). A missing or token-less file is an
-// error. Because the token sits in the file in plaintext, a group- or
-// world-readable file appends a warning to Config.Warnings (the load still
-// succeeds); create the file with mode 0600.
+// LoadConfig reads the config file at the default per-OS path
+// (<user config dir>/gists3/config.json). A missing file is an error
+// wrapping fs.ErrNotExist, so callers can treat absence as "no config".
+// Unknown keys — including a stale token field from a pre-v0.2 file — are
+// ignored.
 func LoadConfig() (*Config, error) {
-	p, err := configPath()
+	p, err := ConfigPath()
 	if err != nil {
 		return nil, err
 	}
@@ -58,37 +63,5 @@ func LoadConfig() (*Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("gists3: parse config %s: %w", p, err)
 	}
-	if cfg.Token == "" {
-		return nil, fmt.Errorf("gists3: config %s: token is required", p)
-	}
-	if runtime.GOOS != "windows" {
-		if fi, err := os.Stat(p); err == nil && fi.Mode().Perm()&0o077 != 0 {
-			cfg.Warnings = append(cfg.Warnings, fmt.Sprintf(
-				"config file %s is readable by other users (mode %#o) and holds a plaintext token; chmod 600 recommended",
-				p, fi.Mode().Perm()))
-		}
-	}
 	return &cfg, nil
-}
-
-// NewFromConfig constructs a Client from an explicit Config. Precedence:
-// functional options beat config fields (a WithBaseURL option overrides
-// cfg.BaseURL), and config fields beat built-in defaults.
-func NewFromConfig(cfg *Config, opts ...Option) *Client {
-	all := make([]Option, 0, len(opts)+1)
-	if cfg.BaseURL != "" {
-		all = append(all, WithBaseURL(cfg.BaseURL))
-	}
-	all = append(all, opts...)
-	return New(cfg.Token, all...)
-}
-
-// NewFromDefaultConfig is LoadConfig followed by NewFromConfig — the one
-// constructor that reads ambient state, named so call sites show it.
-func NewFromDefaultConfig(opts ...Option) (*Client, error) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return nil, err
-	}
-	return NewFromConfig(cfg, opts...), nil
 }

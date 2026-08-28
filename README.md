@@ -19,12 +19,16 @@ g3 cp g3://<a>/conf.json g3://<b>/          # remote copy (client-side GET+PATCH
 date | g3 cp - g3://<gist-id>/last-run      # stdin; "-" also means stdout
 g3 cp g3://<gist-id>/conf.json - | jq .     # body only — status lines are
                                             # suppressed when either end is "-"
+g3 link add claudemd g3://<gist-id>/CLAUDE.md ~/.claude/CLAUDE.md
+vim $(g3 path claudemd) && g3 push claudemd # linked paths: no ID, no scratch
+                                            # file, no mv (below)
 ```
 
 `g3 rm` is still to come, per the
 [implementation plan](docs/002-cli-cp-ls-rm.md); the command contracts live in
-[docs/001-cp-command.md](docs/001-cp-command.md) and
-[docs/002-ls-command.md](docs/002-ls-command.md), the full design in
+[docs/001-cp-command.md](docs/001-cp-command.md),
+[docs/002-ls-command.md](docs/002-ls-command.md), and
+[docs/004-linked-paths.md](docs/004-linked-paths.md), the full design in
 [docs/](docs/). Zero dependencies beyond the Go standard library.
 
 ## Install
@@ -40,13 +44,12 @@ go install github.com/will-wright-eng/gists3/cmd/g3@latest
 `g3` needs a GitHub token with the `gist` scope, resolved in order:
 
 1. `GIST_TOKEN` environment variable
-2. the config file (below)
-3. `gh auth token` — if you use the GitHub CLI, `g3` just works
+2. `gh auth token` — if you use the GitHub CLI, `g3` just works
 
-The layer that supplies the token supplies the whole identity: with
-`GIST_TOKEN` set, the config file is not consulted, so its `base_url` does
-not apply — GitHub Enterprise users relying on `base_url` should unset
-`GIST_TOKEN`.
+The config file never holds a token: identity and endpoint are independent
+layers, so `base_url` applies whichever layer supplies the token. (Before
+v0.2 a plaintext `token` field was supported; it is ignored now — migrate
+with `gh auth login` or `GIST_TOKEN`.)
 
 ## Config file (optional)
 
@@ -57,13 +60,44 @@ Windows):
 ```json
 {
   "default_user": "octocat",
-  "token": "ghp_...",
   "base_url": ""
 }
 ```
 
-`base_url` targets GitHub Enterprise. Keep the file mode `0600` — the token
-is plaintext, and `g3` warns when other users can read it.
+`base_url` targets GitHub Enterprise. The file holds no secrets, so it is
+safe to commit to a dotfiles repo.
+
+## Linked paths
+
+A link declares that a local file *is* the working copy of a gist key, so
+round-tripping an edit stops being four commands with a 32-hex ID typed
+twice:
+
+```sh
+g3 link add claudemd g3://b1e652a05136107f461cd796103508cc/CLAUDE.md ~/.claude/CLAUDE.md
+g3 pull claudemd                # remote → local, if safe
+vim $(g3 path claudemd)         # edit the file where it lives
+g3 push claudemd                # local → remote, if safe
+g3 status                       # per link: in-sync / local-ahead /
+                                #   remote-ahead / diverged / local-missing /
+                                #   remote-missing / missing
+g3 link ls                      # list declarations
+g3 link rm claudemd             # remove the declaration; keeps both sides
+```
+
+Every successful pull or push records a **baseline** — the content both
+sides last agreed on. A direction that would overwrite unseen work (the gist
+edited in the GitHub UI, unpushed local changes) is **refused**, and there
+is no `--force`: reconcile with `g3 cp` in whichever direction should win,
+and the link heals itself on the next `status`. The backend has no
+compare-and-swap, so this turns a silent clobber into a refused command; it
+does not make writes atomic.
+
+Links live in `config.json` — shareable, paths stored unexpanded, a leading
+`~/` resolved per machine. Baselines live next to it in `state.json`, which
+describes this machine only: don't commit it to dotfiles. `push` enforces
+the same guards as `cp` (10 MiB cap, UTF-8 only). Full contract:
+[docs/004-linked-paths.md](docs/004-linked-paths.md).
 
 ## The fine print
 
