@@ -34,7 +34,12 @@ commands:
   path <name>                print a link's local path, ~ expanded, for
                              $(g3 path <name>) interpolation
   status [<name>]            report each link's sync state against the last
-                             agreed baseline (docs/004-linked-paths.md §5)`
+                             agreed baseline (docs/004-linked-paths.md §5)
+  pull <name>                update the local file from the gist, when only
+                             the remote moved since the last sync
+  push <name>                update the gist from the local file, when only
+                             the local side moved; neither command ever
+                             overwrites work — diverged links are refused`
 
 // usageError marks a command-line mistake: main exits 2 for these and 1 for
 // every runtime failure.
@@ -138,6 +143,14 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 			name = args[1]
 		}
 		return cmdStatus(ctx, newClient, name, stdout)
+	case "pull", "push":
+		if len(args) != 2 {
+			return usagef("%s takes exactly a link name\n%s", args[0], usage)
+		}
+		if args[0] == "pull" {
+			return cmdPull(ctx, newClient, args[1], stdout)
+		}
+		return cmdPush(ctx, newClient, args[1], stdout)
 	default:
 		return usagef("unknown command %q\n%s", args[0], usage)
 	}

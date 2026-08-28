@@ -161,18 +161,24 @@ func hashLocal(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// hashRemote returns the remote content's hash — the ETag the engine already
-// computes — or "" when the key is missing. A vanished gist reports the same
-// way: §5.1 row 3 deliberately absorbs both *NotFoundError shapes.
-func hashRemote(ctx context.Context, client *gists3.Client, loc location) (string, error) {
+// fetchRemote returns the remote content and its hash — the ETag the engine
+// computes from those same bytes — or (nil, "") when the key is missing. A
+// vanished gist reports the same way: §5.1 row 3 deliberately absorbs both
+// *NotFoundError shapes. The body comes back so pull can write the exact
+// bytes the state was resolved against, and its baseline with them.
+func fetchRemote(ctx context.Context, client *gists3.Client, loc location) ([]byte, string, error) {
 	out, err := client.GetObject(ctx, &gists3.GetObjectInput{Bucket: loc.bucket, Key: loc.key})
 	var nf *gists3.NotFoundError
 	if errors.As(err, &nf) {
-		return "", nil
+		return nil, "", nil
 	}
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	out.Body.Close()
-	return out.ETag, nil
+	defer out.Body.Close()
+	body, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	return body, out.ETag, nil
 }

@@ -12,12 +12,14 @@ import (
 )
 
 // linkStatus is one resolved link: the parsed remote, the expanded local
-// path, both content hashes ("" = missing), and the §5.1 state.
+// path, both content hashes ("" = missing), the remote body those hashes
+// were computed against, and the §5.1 state.
 type linkStatus struct {
 	loc    location
 	path   string
 	local  string
 	remote string
+	body   []byte
 	state  syncState
 }
 
@@ -38,11 +40,11 @@ func resolveLink(ctx context.Context, client *gists3.Client, l gists3.Link, base
 	if err != nil {
 		return nil, err
 	}
-	remote, err := hashRemote(ctx, client, loc)
+	body, remote, err := fetchRemote(ctx, client, loc)
 	if err != nil {
 		return nil, err
 	}
-	return &linkStatus{loc: loc, path: path, local: local, remote: remote, state: resolve(local, remote, base)}, nil
+	return &linkStatus{loc: loc, path: path, local: local, remote: remote, body: body, state: resolve(local, remote, base)}, nil
 }
 
 // cmdStatus reports each link's state, name-sorted, one "state name path"
