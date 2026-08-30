@@ -20,9 +20,21 @@ import (
 // buffering unbounded input and letting the API reject it opaquely.
 const maxObjectBytes = 10 << 20
 
-// classify parses both cp arguments and validates the pair. Every error it
-// returns is a usage error.
+// classify expands any "@<link>" alias, parses both cp arguments, and
+// validates the pair. Every error it returns is a usage error, except an
+// unreadable config file reached through an alias — expansion is the one step
+// here that touches disk, which 001 §6.2's "classify is pure" predates.
+//
+// Expanding before parseArg keeps links out of the URI grammar: everything
+// downstream sees an ordinary g3:// URI, and since link add rejects the
+// prefix forms, an expansion never produces one to confuse key inference.
 func classify(srcArg, dstArg string) (src, dst location, err error) {
+	if srcArg, err = expandAlias(srcArg); err != nil {
+		return src, dst, err
+	}
+	if dstArg, err = expandAlias(dstArg); err != nil {
+		return src, dst, err
+	}
 	if src, err = parseArg(srcArg); err != nil {
 		return src, dst, err
 	}

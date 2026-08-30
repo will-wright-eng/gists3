@@ -442,6 +442,9 @@ func ls(ctx context.Context, client *gists3.Client, stdout io.Writer) error
 
 // cp.go — classify is pure (parse + pair validation, all the exit-2 cases);
 // cp receives already-classified locations and does the I/O
+// (004 §6 added @<link> expansion as classify's first step: it now reads
+//  config.json when — and only when — an argument carries the sigil, and
+//  that read is its one non-usage error)
 func classify(srcArg, dstArg string) (src, dst location, err error)
 func cp(ctx context.Context, client *gists3.Client, src, dst location,
 	stdin io.Reader, stdout io.Writer) error

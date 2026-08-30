@@ -19,8 +19,9 @@ const usage = `usage: g3 <command> [arguments]
 commands:
   cp <source> <destination>  copy one object between the local machine and a
                              gist; one side must be a g3://<gist-id>/<key>
-                             URI, and "-" means stdin or stdout (a local file
-                             named "-" is reachable as ./-). Directories are
+                             URI or an @<link> alias for one, and "-" means
+                             stdin or stdout (local files named "-" or "@x"
+                             are reachable as ./- and ./@x). Directories are
                              not supported — there is no --recursive yet.
   ls [g3://<gist-id>[/<prefix>]]
                              list buckets (gists) the token can see, or one

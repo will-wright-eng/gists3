@@ -22,6 +22,8 @@ g3 cp g3://<gist-id>/conf.json - | jq .     # body only — status lines are
 g3 link add claudemd g3://<gist-id>/CLAUDE.md ~/.claude/CLAUDE.md
 vim $(g3 path claudemd) && g3 push claudemd # linked paths: no ID, no scratch
                                             # file, no mv (below)
+g3 cp @claudemd -                           # @<link> stands in for a link's
+                                            # URI anywhere cp takes one
 ```
 
 `g3 rm` is still to come, per the
@@ -78,6 +80,8 @@ g3 link add claudemd g3://b1e652a05136107f461cd796103508cc/CLAUDE.md ~/.claude/C
 g3 pull claudemd                # remote → local, if safe
 vim $(g3 path claudemd)         # edit the file where it lives
 g3 push claudemd                # local → remote, if safe
+g3 cp @claudemd -               # @<link> is that link's URI, on either
+                                #   side of cp — no ID typed
 g3 status                       # per link: in-sync / local-ahead /
                                 #   remote-ahead / diverged / local-missing /
                                 #   remote-missing / missing
@@ -92,6 +96,21 @@ is no `--force`: reconcile with `g3 cp` in whichever direction should win,
 and the link heals itself on the next `status`. The backend has no
 compare-and-swap, so this turns a silent clobber into a refused command; it
 does not make writes atomic.
+
+Reconciling uses the same two names the link already gave you — `@claudemd`
+for the gist, `$(g3 path claudemd)` for the file:
+
+```sh
+diff $(g3 path claudemd) <(g3 cp @claudemd -)   # see the difference
+g3 cp $(g3 path claudemd) @claudemd             # local wins
+g3 cp @claudemd $(g3 path claudemd)             # remote wins
+g3 status claudemd                              # → in-sync, baseline adopted
+```
+
+`@<link>` always means the link's **remote URI**, whichever side of `cp` it
+appears on; the local half is `g3 path`. Link names can't start with `@`, so
+the sigil is unambiguous — and a local file genuinely named `@x` is still
+reachable as `./@x`.
 
 Links live in `config.json` — shareable, paths stored unexpanded, a leading
 `~/` resolved per machine. Baselines live next to it in `state.json`, which
