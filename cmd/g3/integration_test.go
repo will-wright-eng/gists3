@@ -212,6 +212,26 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 
 	g3Eventually("push local edit", "push", "it")
 
+	// The @<link> alias stands in for the URI on either side of cp — the §5.2
+	// reconciliation recipe, minus the 32-hex ID.
+	if got := g3Eventually("cp from alias", "cp", "@it", "-"); got != "v3\n" {
+		t.Fatalf("cp @it - = %q, want the remote body", got)
+	}
+	v4 := filepath.Join(home, "v4.md")
+	if err := os.WriteFile(v4, []byte("v4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g3Eventually("cp to alias", "cp", v4, "@it")
+
+	// An undeclared alias is a usage error, and never reaches the network.
+	_, stderr, err = g3("cp", "@nope", "-")
+	if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+		t.Fatalf("cp @nope - = %v, want exit 2", err)
+	}
+	if !strings.Contains(stderr, "unknown link") {
+		t.Fatalf("stderr = %q, want the unknown-link error", stderr)
+	}
+
 	// rm keeps both sides.
 	mustG3("link", "rm", "it")
 	eventually(t, "GetObject after rm", func() error {
@@ -219,8 +239,8 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if got != "v3\n" {
-			return fmt.Errorf("remote = %q, want v3 kept", got)
+		if got != "v4\n" {
+			return fmt.Errorf("remote = %q, want v4 kept", got)
 		}
 		return nil
 	})

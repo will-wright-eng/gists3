@@ -19,6 +19,11 @@ import (
 // leading "@", so a name can never be confused with a path or a g3:// URI.
 var linkNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
+// aliasPrefix is the other half of that grammar: the sigil linkNameRE
+// excludes is what lets "@claudemd" stand in for a link's URI wherever a
+// command takes one (§6).
+const aliasPrefix = "@"
+
 // linkAdd declares a link — pure bookkeeping, no network. The remote is not
 // verified to exist: a typo'd gist ID surfaces on the first status, which
 // keeps link add usable without credentials.
@@ -84,9 +89,9 @@ func linkRM(name string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	l, ok := cfg.Links[name]
-	if !ok {
-		return usagef("unknown link %q; g3 link ls shows the declared links", name)
+	l, err := lookupLink(cfg, name)
+	if err != nil {
+		return err
 	}
 	delete(cfg.Links, name)
 	if err := saveLinks(cfg.Links); err != nil {
@@ -121,9 +126,9 @@ func linkPath(name string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	l, ok := cfg.Links[name]
-	if !ok {
-		return usagef("unknown link %q; g3 link ls shows the declared links", name)
+	l, err := lookupLink(cfg, name)
+	if err != nil {
+		return err
 	}
 	p, err := expandPath(l.Path)
 	if err != nil {
@@ -131,6 +136,39 @@ func linkPath(name string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, p)
 	return nil
+}
+
+// lookupLink resolves a name against the link table. The miss is a usage
+// error naming the command that lists them, and every caller reaches it
+// before constructing a client, so an unknown link exits 2 without
+// credentials.
+func lookupLink(cfg *gists3.Config, name string) (gists3.Link, error) {
+	l, ok := cfg.Links[name]
+	if !ok {
+		return gists3.Link{}, usagef("unknown link %q; g3 link ls shows the declared links", name)
+	}
+	return l, nil
+}
+
+// expandAlias rewrites "@<name>" to that link's URI — always the remote half,
+// wherever the argument appears, since the local half already has a spelling
+// in $(g3 path <name>). Anything without the sigil is returned untouched and
+// unread, so a command that was given no alias never opens the config file
+// (docs/004 §6).
+func expandAlias(arg string) (string, error) {
+	name, ok := strings.CutPrefix(arg, aliasPrefix)
+	if !ok {
+		return arg, nil
+	}
+	cfg, err := loadConfig()
+	if err != nil {
+		return "", err
+	}
+	l, err := lookupLink(cfg, name)
+	if err != nil {
+		return "", err
+	}
+	return l.URI, nil
 }
 
 // expandPath resolves a leading "~/" via os.UserHomeDir — nothing else: no

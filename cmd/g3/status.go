@@ -61,8 +61,8 @@ func cmdStatus(ctx context.Context, newClient clientFn, name string, stdout io.W
 	}
 	var names []string
 	if name != "" {
-		if _, ok := cfg.Links[name]; !ok {
-			return usagef("unknown link %q; g3 link ls shows the declared links", name)
+		if _, err := lookupLink(cfg, name); err != nil {
+			return err
 		}
 		names = []string{name}
 	} else {

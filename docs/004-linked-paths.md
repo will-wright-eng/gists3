@@ -78,11 +78,17 @@ g3 status [<name>]                                report sync state
 g3 pull <name>                                    remote → local, if safe
 g3 push <name>                                    local → remote, if safe
 g3 path <name>                                    print the local path
+g3 cp @<name> <dst> | g3 cp <src> @<name>         the link's URI, in cp
 ```
 
 Names match `[A-Za-z0-9._-]+`. That excludes `/`, `:` and a leading `@`, so a
-name can never be confused with a path or a `g3://` URI, and leaves `@name`
-free as a future sigil for links inside `cp`.
+name can never be confused with a path or a `g3://` URI, which is what frees
+`@name` as the sigil for a link inside `cp` (§6).
+
+`@name` resolves to the link's **remote URI**, on either side of `cp`. It is
+deliberately not position-sensitive: the local half already has a spelling in
+`$(g3 path name)`, and a sigil that meant "remote as a source, local as a
+destination" would leave `g3 cp @claude @claude` with no coherent reading.
 
 **Streams** follow 001 §4.5 unchanged: status lines and command data go to
 **stdout**, every diagnostic to **stderr**. Stdout purity is load-bearing for
@@ -233,14 +239,19 @@ Resolution is manual, with the tools that already exist:
 
 ```sh
 # see the difference — the remote side streams to stdout, the local side is a file
-diff $(g3 path claude) <(g3 cp g3://<id>/CLAUDE.md -)
+diff $(g3 path claude) <(g3 cp @claude -)
 
 # reconcile by hand, or edit the gist in the GitHub UI, then pick a winner:
-g3 cp $(g3 path claude) g3://<id>/CLAUDE.md    # local wins
-g3 cp g3://<id>/CLAUDE.md $(g3 path claude)    # remote wins
+g3 cp $(g3 path claude) @claude    # local wins
+g3 cp @claude $(g3 path claude)    # remote wins
 
-g3 status claude                               # L == R → row 4 → baseline adopted
+g3 status claude                   # L == R → row 4 → baseline adopted
 ```
+
+Both halves of the link are named, not typed: `@claude` for the gist,
+`$(g3 path claude)` for the file. Reconciliation is the motivating case for
+the alias — it is the one path that otherwise sends you back to the 32-hex ID
+the link exists to retire.
 
 The last step is why row 4 matters: once the two sides genuinely agree, the
 link heals itself and `pull`/`push` work again. No repair subcommand, no
@@ -360,6 +371,35 @@ rejection and the reserved-`gistfile*`-key rule (`operations.go:406-414`).
 Prints the fully expanded absolute path and nothing else — no trailing text, no
 stderr chatter on success — so `$(g3 path claude)` is safe to interpolate. It
 does not check that the file exists; `status` is for that. Unknown name exits 2.
+
+### `g3 cp @<name> <dst>` / `g3 cp <src> @<name>`
+
+`expandAlias` (`link.go`, beside `linkNameRE` — the two halves of one grammar
+rule) rewrites an `@`-prefixed argument to the link's URI as `classify`'s first
+step, so everything downstream — the "one side must be remote" rule, key
+inference, the guards, the status line — sees an ordinary `g3://` URI and needs
+no knowledge of links. The status line prints the **resolved** URI: what the
+copy touched is what it reports.
+
+It takes **one argument, not a pair**: `cp` calls it twice, and the planned
+`g3 rm` (002 stage 6) takes a single argument and calls it once.
+
+- **Unknown link exits 2**, not 1 — the same class as a malformed URI, and it
+  is reached before the client is built, so it does not need credentials.
+- **Only an alias opens `config.json`**, so classification stays a function of
+  the arguments alone: a malformed config cannot turn a well-formed `cp` into
+  a usage error. It does not make that `cp` succeed — `newClient` reads the
+  same file for `base_url` (`client.go`) — it makes it fail at 1, as a runtime
+  error, which is what it is.
+- **No `@name/<key>` form.** The whole argument after `@` is the name; a link
+  names one file. Aliasing a *bucket* is a separate feature (§12).
+- **An expansion is never a prefix form**, since `link add` requires a full
+  key, so `cp`'s inference rules are untouched.
+- **`./@x`** reaches a local file genuinely named `@x`, exactly as `./-` does
+  for `-` (001 §4.1). Only a leading `@` is a sigil.
+
+`ls` does not take `@name`: a link names a key, `ls` takes a bucket or a
+prefix, so the two do not line up (§12, bucket alias table).
 
 ---
 
@@ -521,6 +561,9 @@ package-level seam.
       at all; `base_url` applies in every case.
 - [ ] `push` refuses a non-UTF-8 file with the same error `cp` gives.
 - [ ] `link rm` leaves both the gist and the local file in place.
+- [ ] `g3 cp @claude -` and `g3 cp <file> @claude` copy the same bytes the
+      equivalent `g3://` invocation would, and an undeclared `@name` exits 2
+      without a network call.
 - [ ] `make check` green at every stage; zero new module dependencies.
 
 ---
@@ -543,7 +586,7 @@ Genuinely deferred:
 | Directory ⟷ bucket mounts | Drags in delete propagation, per-file state, partial-failure semantics — its own document |
 | Per-bucket batching for `status` | Needs an engine multi-key read (§5.3) |
 | `status` exit code reflecting sync state | `git diff --quiet` shaped; only if scripting demand appears |
-| Bucket alias table (`g3://claude/…`) | A link names a file, an alias names a bucket; separable, and links may prove sufficient |
+| Bucket alias table (`g3://claude/…`) | A link names a file, a bucket alias names a gist; `@name` (§6) covers the file case, so this stays separable — and unbuilt until `ls`/`rm` make the bucket case bite |
 
 ---
 
