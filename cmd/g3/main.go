@@ -32,15 +32,17 @@ commands:
   link ls                    list declared links
   link rm <name>             remove a declaration; keeps both the gist and
                              the local file
-  path <name>                print a link's local path, ~ expanded, for
-                             $(g3 path <name>) interpolation
-  status [<name>]            report each link's sync state against the last
+  link path <name>           print a link's local path, ~ expanded, for
+                             $(g3 link path <name>) interpolation
+  link status                report every link's sync state against the last
                              agreed baseline (docs/004-linked-paths.md §5)
-  pull <name>                update the local file from the gist, when only
+  link pull <name>           update the local file from the gist, when only
                              the remote moved since the last sync
-  push <name>                update the gist from the local file, when only
+  link push <name>           update the gist from the local file, when only
                              the local side moved; neither command ever
                              overwrites work — diverged links are refused`
+
+const linkSubcommands = "add, ls, rm, path, status, pull, or push"
 
 // usageError marks a command-line mistake: main exits 2 for these and 1 for
 // every runtime failure.
@@ -108,51 +110,53 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 		}
 		return lsBuckets(ctx, client, stdout)
 	case "link":
-		if len(args) < 2 {
-			return usagef("link needs a subcommand: add, ls, or rm\n%s", usage)
+		return runLink(ctx, args[1:], newClient, stdout)
+	default:
+		return usagef("unknown command %q\n%s", args[0], usage)
+	}
+}
+
+func runLink(ctx context.Context, args []string, newClient clientFn, stdout io.Writer) error {
+	if len(args) == 0 {
+		return usagef("link needs a subcommand: %s\n%s", linkSubcommands, usage)
+	}
+	switch args[0] {
+	case "add":
+		if len(args) != 4 {
+			return usagef("link add takes a name, a g3://<gist-id>/<key> URI, and a local path\n%s", usage)
 		}
-		switch args[1] {
-		case "add":
-			if len(args) != 5 {
-				return usagef("link add takes a name, a g3://<gist-id>/<key> URI, and a local path\n%s", usage)
-			}
-			return linkAdd(args[2], args[3], args[4], stdout)
-		case "ls":
-			if len(args) != 2 {
-				return usagef("link ls takes no arguments\n%s", usage)
-			}
-			return linkLS(stdout)
-		case "rm":
-			if len(args) != 3 {
-				return usagef("link rm takes exactly a link name\n%s", usage)
-			}
-			return linkRM(args[2], stdout)
-		default:
-			return usagef("unknown link subcommand %q; want add, ls, or rm\n%s", args[1], usage)
+		return linkAdd(args[1], args[2], args[3], stdout)
+	case "ls":
+		if len(args) != 1 {
+			return usagef("link ls takes no arguments\n%s", usage)
 		}
+		return linkLS(stdout)
+	case "rm":
+		if len(args) != 2 {
+			return usagef("link rm takes exactly a link name\n%s", usage)
+		}
+		return linkRM(args[1], stdout)
 	case "path":
 		if len(args) != 2 {
-			return usagef("path takes exactly a link name\n%s", usage)
+			return usagef("link path takes exactly a link name\n%s", usage)
 		}
 		return linkPath(args[1], stdout)
 	case "status":
-		if len(args) > 2 {
-			return usagef("status takes at most one link name\n%s", usage)
+		if len(args) != 1 {
+			return usagef("link status takes no arguments\n%s", usage)
 		}
-		name := ""
-		if len(args) == 2 {
-			name = args[1]
-		}
-		return cmdStatus(ctx, newClient, name, stdout)
-	case "pull", "push":
+		return cmdStatus(ctx, newClient, stdout)
+	case "pull":
 		if len(args) != 2 {
-			return usagef("%s takes exactly a link name\n%s", args[0], usage)
+			return usagef("link pull takes exactly a link name\n%s", usage)
 		}
-		if args[0] == "pull" {
-			return cmdPull(ctx, newClient, args[1], stdout)
+		return cmdPull(ctx, newClient, args[1], stdout)
+	case "push":
+		if len(args) != 2 {
+			return usagef("link push takes exactly a link name\n%s", usage)
 		}
 		return cmdPush(ctx, newClient, args[1], stdout)
 	default:
-		return usagef("unknown command %q\n%s", args[0], usage)
+		return usagef("unknown link subcommand %q; want %s\n%s", args[0], linkSubcommands, usage)
 	}
 }

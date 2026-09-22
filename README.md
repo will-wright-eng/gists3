@@ -20,7 +20,8 @@ date | g3 cp - g3://<gist-id>/last-run      # stdin; "-" also means stdout
 g3 cp g3://<gist-id>/conf.json - | jq .     # body only — status lines are
                                             # suppressed when either end is "-"
 g3 link add claudemd g3://<gist-id>/CLAUDE.md ~/.claude/CLAUDE.md
-vim $(g3 path claudemd) && g3 push claudemd # linked paths: no ID, no scratch
+vim $(g3 link path claudemd) \
+  && g3 link push claudemd                  # linked paths: no ID, no scratch
                                             # file, no mv (below)
 g3 cp @claudemd -                           # @<link> stands in for a link's
                                             # URI anywhere cp takes one
@@ -77,12 +78,12 @@ twice:
 
 ```sh
 g3 link add claudemd g3://b1e652a05136107f461cd796103508cc/CLAUDE.md ~/.claude/CLAUDE.md
-g3 pull claudemd                # remote → local, if safe
-vim $(g3 path claudemd)         # edit the file where it lives
-g3 push claudemd                # local → remote, if safe
+g3 link pull claudemd           # remote → local, if safe
+vim $(g3 link path claudemd)    # edit the file where it lives
+g3 link push claudemd           # local → remote, if safe
 g3 cp @claudemd -               # @<link> is that link's URI, on either
                                 #   side of cp — no ID typed
-g3 status                       # per link: in-sync / local-ahead /
+g3 link status                  # every link: in-sync / local-ahead /
                                 #   remote-ahead / diverged / local-missing /
                                 #   remote-missing / missing
 g3 link ls                      # list declarations
@@ -98,18 +99,18 @@ compare-and-swap, so this turns a silent clobber into a refused command; it
 does not make writes atomic.
 
 Reconciling uses the same two names the link already gave you — `@claudemd`
-for the gist, `$(g3 path claudemd)` for the file:
+for the gist, `$(g3 link path claudemd)` for the file:
 
 ```sh
-diff $(g3 path claudemd) <(g3 cp @claudemd -)   # see the difference
-g3 cp $(g3 path claudemd) @claudemd             # local wins
-g3 cp @claudemd $(g3 path claudemd)             # remote wins
-g3 status claudemd                              # → in-sync, baseline adopted
+diff $(g3 link path claudemd) <(g3 cp @claudemd -)  # see the difference
+g3 cp $(g3 link path claudemd) @claudemd            # local wins
+g3 cp @claudemd $(g3 link path claudemd)            # remote wins
+g3 link status                                      # → in-sync, baseline adopted
 ```
 
 `@<link>` always means the link's **remote URI**, whichever side of `cp` it
-appears on; the local half is `g3 path`. Link names can't start with `@`, so
-the sigil is unambiguous — and a local file genuinely named `@x` is still
+appears on; the local half is `g3 link path`. Link names can't start with `@`,
+so the sigil is unambiguous — and a local file genuinely named `@x` is still
 reachable as `./@x`.
 
 Links live in `config.json` — shareable, paths stored unexpanded, a leading

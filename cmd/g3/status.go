@@ -47,31 +47,26 @@ func resolveLink(ctx context.Context, client *gists3.Client, l gists3.Link, base
 	return &linkStatus{loc: loc, path: path, local: local, remote: remote, body: body, state: resolve(local, remote, base)}, nil
 }
 
-// cmdStatus reports each link's state, name-sorted, one "state name path"
-// line per link. The client is constructed only after the name argument is
-// validated, so an unknown link exits 2 even without credentials. It exits 0
-// whatever states it finds; only a failure to complete the report is an
-// error, and any error is global (§6) — NotFound is already absorbed as
-// remote-missing — so the report aborts rather than repeating the failure
+// cmdStatus reports every link's state, name-sorted, one "state name path"
+// line per link — like ls, it takes no argument and covers the whole table.
+// It exits 0 whatever states it finds; only a failure to complete the report
+// is an error, and any error is global (§6) — NotFound is already absorbed
+// as remote-missing — so the report aborts rather than repeating the failure
 // once per remaining row.
-func cmdStatus(ctx context.Context, newClient clientFn, name string, stdout io.Writer) error {
+func cmdStatus(ctx context.Context, newClient clientFn, stdout io.Writer) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	var names []string
-	if name != "" {
-		if _, err := lookupLink(cfg, name); err != nil {
-			return err
-		}
-		names = []string{name}
-	} else {
-		for n := range cfg.Links {
-			names = append(names, n)
-		}
-		slices.Sort(names)
+	names := make([]string, 0, len(cfg.Links))
+	for n := range cfg.Links {
+		names = append(names, n)
 	}
+	slices.Sort(names)
 	if len(names) == 0 {
+		// An empty table is not an error, but silence reads like a command
+		// that failed to find something, so the note names the way out.
+		fmt.Fprintln(stdout, "no links to evaluate; declare one with g3 link add")
 		return nil
 	}
 	st, err := loadState()

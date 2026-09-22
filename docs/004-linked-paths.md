@@ -1,6 +1,6 @@
-# 004 — Linked paths: `pull`, `push`, `status`
+# 004 — Linked paths: `link pull`, `link push`, `link status`
 
-**Status:** Draft v0.2 (2026-08-26)
+**Status:** Draft v0.3 (2026-09-21)
 **Scope:** `cmd/g3`, plus removal of config-file token auth from
 `internal/gists3` (§8); no new module dependencies
 **Depends on:** [003-cli-first.md](003-cli-first.md) (CLI verbs need not be S3
@@ -29,14 +29,14 @@ mv CLAUDE.md ~/.claude/CLAUDE.md
 With a link named `claude`:
 
 ```sh
-g3 pull claude
-vim $(g3 path claude)
-g3 push claude
+g3 link pull claude
+vim $(g3 link path claude)
+g3 link push claude
 ```
 
-No ID, no scratch file, no `mv` — the file is edited where it lives. `g3 path`
-is deliberately a plain path on stdout rather than an `edit` subcommand, so it
-composes with any editor, pager, or diff tool.
+No ID, no scratch file, no `mv` — the file is edited where it lives.
+`g3 link path` is deliberately a plain path on stdout rather than an `edit`
+subcommand, so it composes with any editor, pager, or diff tool.
 
 The command surface is composition over existing engine operations —
 `GetObject`, `PutObject` — plus a `links` section in the config file and one
@@ -49,7 +49,7 @@ auth goes away (§8), which is what lets links live in `config.json` at all.
 
 `cp` is a directional copy with an explicit source and destination, so
 clobbering is always the caller's stated intent. Naming a pair and reducing it
-to `g3 push claude` removes that statement, and with it the safety: **both
+to `g3 link push claude` removes that statement, and with it the safety: **both
 sides can change independently.** A `push` after someone edited the gist in the
 GitHub UI silently destroys their edit; a `pull` over unsaved local work
 silently destroys yours.
@@ -72,13 +72,13 @@ compare-and-swap.
 
 ```
 g3 link add <name> g3://<gist-id>/<key> <path>   declare a link (no network)
-g3 link ls                                        list declarations
-g3 link rm <name>                                 remove a declaration only
-g3 status [<name>]                                report sync state
-g3 pull <name>                                    remote → local, if safe
-g3 push <name>                                    local → remote, if safe
-g3 path <name>                                    print the local path
-g3 cp @<name> <dst> | g3 cp <src> @<name>         the link's URI, in cp
+g3 link ls                                       list declarations
+g3 link rm <name>                                remove a declaration only
+g3 link status                                   report sync state, all links
+g3 link pull <name>                              remote → local, if safe
+g3 link push <name>                              local → remote, if safe
+g3 link path <name>                              print the local path
+g3 cp @<name> <dst> | g3 cp <src> @<name>        the link's URI, in cp
 ```
 
 Names match `[A-Za-z0-9._-]+`. That excludes `/`, `:` and a leading `@`, so a
@@ -87,12 +87,12 @@ name can never be confused with a path or a `g3://` URI, which is what frees
 
 `@name` resolves to the link's **remote URI**, on either side of `cp`. It is
 deliberately not position-sensitive: the local half already has a spelling in
-`$(g3 path name)`, and a sigil that meant "remote as a source, local as a
+`$(g3 link path name)`, and a sigil that meant "remote as a source, local as a
 destination" would leave `g3 cp @claude @claude` with no coherent reading.
 
 **Streams** follow 001 §4.5 unchanged: status lines and command data go to
 **stdout**, every diagnostic to **stderr**. Stdout purity is load-bearing for
-`$(g3 path claude)` exactly as it is for `g3 cp g3://b/k -`.
+`$(g3 link path claude)` exactly as it is for `g3 cp g3://b/k -`.
 
 **Exit codes** stay the three 001 §4.5 defines — no new code:
 
@@ -239,19 +239,19 @@ Resolution is manual, with the tools that already exist:
 
 ```sh
 # see the difference — the remote side streams to stdout, the local side is a file
-diff $(g3 path claude) <(g3 cp @claude -)
+diff $(g3 link path claude) <(g3 cp @claude -)
 
 # reconcile by hand, or edit the gist in the GitHub UI, then pick a winner:
-g3 cp $(g3 path claude) @claude    # local wins
-g3 cp @claude $(g3 path claude)    # remote wins
+g3 cp $(g3 link path claude) @claude    # local wins
+g3 cp @claude $(g3 link path claude)    # remote wins
 
-g3 status claude                   # L == R → row 4 → baseline adopted
+g3 link status                          # L == R → row 4 → baseline adopted
 ```
 
 Both halves of the link are named, not typed: `@claude` for the gist,
-`$(g3 path claude)` for the file. Reconciliation is the motivating case for
-the alias — it is the one path that otherwise sends you back to the 32-hex ID
-the link exists to retire.
+`$(g3 link path claude)` for the file. Reconciliation is the motivating case
+for the alias — it is the one path that otherwise sends you back to the
+32-hex ID the link exists to retire.
 
 The last step is why row 4 matters: once the two sides genuinely agree, the
 link heals itself and `pull`/`push` work again. No repair subcommand, no
@@ -259,8 +259,7 @@ link heals itself and `pull`/`push` work again. No repair subcommand, no
 
 ### 5.3 Cost
 
-One `GetObject` per link — `status` with no argument is N round trips for N
-links. `HeadObject` is not an optimization; its godoc says so outright
+One `GetObject` per link — `status` is N round trips for N links. `HeadObject` is not an optimization; its godoc says so outright
 (`operations.go:248`: *"It is NOT cheaper than GetObject"*), because the Gist
 API has no metadata endpoint and both calls fetch the whole gist.
 
@@ -304,9 +303,11 @@ unlinked: claude
   kept g3://b1e652a05136107f461cd796103508cc/CLAUDE.md
 ```
 
-### `g3 status [<name>]`
+### `g3 link status`
 
-State, name, path — one line per link, name-sorted. With a name, just that one.
+State, name, path — one line per link, name-sorted. Like `ls` with no URI,
+it takes no argument and reports the whole table; a single link is
+`g3 link status | grep claude`.
 
 ```
 in-sync        claude   ~/.claude/CLAUDE.md
@@ -315,6 +316,11 @@ remote-ahead   gitcfg   ~/.gitconfig
 diverged       notes    ~/notes/scratch.md
 remote-missing new      ~/new.md
 ```
+
+An empty link table prints `no links to evaluate; declare one with g3 link
+add` and exits 0. Silence would be the terser answer, but it reads as a
+command that failed to find something; the note names the state and the way
+out, like every other `g3` message (001 §4.5).
 
 States are the hyphenated labels from §5.1 — greppable, fixed vocabulary.
 `status` exits 0 whatever states it finds; only a failure to complete the
@@ -328,7 +334,7 @@ prints the rows it completed, writes the error to stderr, and exits 1, instead
 of repeating one global failure once per remaining row. Any baseline adopted
 under row 4 before the abort is still persisted.
 
-### `g3 pull <name>` / `g3 push <name>`
+### `g3 link pull <name>` / `g3 link push <name>`
 
 Resolve state per §5.1, then act or refuse. Confirmation lines go to stdout in
 `cp`'s aws-cli voice (001 §4.5):
@@ -343,7 +349,7 @@ A refusal goes to stderr, names the state and the way out, and exits 1:
 
 ```
 g3: refused: claude is diverged — local and remote both changed since the last sync.
-    Reconcile with g3 cp, then re-run g3 status. (see docs/004-linked-paths.md §5.2)
+    Reconcile with g3 cp, then re-run g3 link status. (see docs/004-linked-paths.md §5.2)
 ```
 
 **The baseline is written from the bytes just transferred, never from a
@@ -359,18 +365,20 @@ Parent directories are created.
 `push` reads the local file through `cp`'s `readBody` (`cp.go:92-104`) before
 calling `PutObject`, so it inherits the 10 MiB cap and the UTF-8 check that
 001 §4.6 specifies for uploads. That reuse is deliberate: routing straight to
-`PutObject` would let `g3 push` upload a binary file that `g3 cp` refuses —
-the same bytes to the same destination, answered differently depending on which
-command was typed — and 001 §5 records that non-UTF-8 content is *corrupted
-silently* by JSON-string storage rather than merely rejected. Guard rejections
-exit 1, per 001 §4.5. From `PutObject` itself, `push` inherits empty-body
-rejection and the reserved-`gistfile*`-key rule (`operations.go:406-414`).
+`PutObject` would let `g3 link push` upload a binary file that `g3 cp` refuses
+— the same bytes to the same destination, answered differently depending on
+which command was typed — and 001 §5 records that non-UTF-8 content is
+*corrupted silently* by JSON-string storage rather than merely rejected.
+Guard rejections exit 1, per 001 §4.5. From `PutObject` itself, `push`
+inherits empty-body rejection and the reserved-`gistfile*`-key rule
+(`operations.go:406-414`).
 
-### `g3 path <name>`
+### `g3 link path <name>`
 
 Prints the fully expanded absolute path and nothing else — no trailing text, no
-stderr chatter on success — so `$(g3 path claude)` is safe to interpolate. It
-does not check that the file exists; `status` is for that. Unknown name exits 2.
+stderr chatter on success — so `$(g3 link path claude)` is safe to
+interpolate. It does not check that the file exists; `link status` is for that.
+Unknown name exits 2.
 
 ### `g3 cp @<name> <dst>` / `g3 cp <src> @<name>`
 
@@ -495,16 +503,17 @@ First because it reshapes `Config`, which every later stage extends.
 *Done when:* identity resolves from `gh` with no `config.json` present, and
 `base_url` applies with `GIST_TOKEN` set.
 
-### Stage 2 — `links` in `config.json`, the `link` command set, and `g3 path`
+### Stage 2 — `links` in `config.json`, the `link` command set, and `g3 link path`
 
 Schema addition, load/save with unknown-key preservation, `link add|ls|rm`,
-name and path validation, `~` expansion, `g3 path`. No network, no engine calls.
+name and path validation, `~` expansion, `g3 link path`. No network, no engine
+calls.
 
 *Done when:* a link survives a round trip through the file and
-`vim $(g3 path claude)` opens the right file — with `default_user` and
+`vim $(g3 link path claude)` opens the right file — with `default_user` and
 `base_url` untouched by the rewrite.
 
-### Stage 3 — `state.json` and `g3 status`
+### Stage 3 — `state.json` and `g3 link status`
 
 Baseline load/save, `hashLocal`/`hashRemote`, the §5.1 resolution table as a
 pure function, `status` output, row-4 baseline adoption, abort-on-error.
@@ -548,8 +557,8 @@ package-level seam.
 ## 11. Acceptance
 
 - [ ] `g3 link add claude g3://<id>/CLAUDE.md ~/.claude/CLAUDE.md` then
-      `vim $(g3 path claude)` then `g3 push claude` — the original four-command
-      workflow, minus the ID, the scratch file, and the `mv`.
+      `vim $(g3 link path claude)` then `g3 link push claude` — the original
+      four-command workflow, minus the ID, the scratch file, and the `mv`.
 - [ ] Every state in §5.1 is reachable and correctly labeled by `status`.
 - [ ] A refused `pull`/`push` exits 1, changes nothing on either side, and
       names the recovery path.
@@ -568,6 +577,31 @@ package-level seam.
 
 ---
 
+## 11.1 Amendment — the link commands moved under `link` (2026-09-21)
+
+`status`, `pull`, `push`, and `path` shipped as top-level commands and are now
+subcommands of `link`: `g3 link status`, `g3 link pull`, `g3 link push`,
+`g3 link path`. One feature gets one namespace — `link add`/`ls`/`rm` already
+lived there, and four sibling verbs at top level made the surface read as if
+they were general-purpose rather than link-specific.
+
+The old spellings are **removed outright**, not aliased, on the same reasoning
+as §8: there are no release tags yet, and carrying two spellings would mean
+documenting both forever. `g3 push claudemd` now exits 2 with
+`unknown command "push"`. The migration is a `sed` over your aliases and
+scripts — insert `link` after `g3`.
+
+## 11.2 Amendment — `link status` takes no name (2026-09-21)
+
+`g3 link status [<name>]` is now `g3 link status`: no argument, every link,
+the shape `ls` already has. The optional name bought a filter that `grep`
+does better, and it cost the command a second mode — validate-the-name,
+exit-2-on-a-miss — for a report whose whole point is the table.
+
+An empty table now prints a note instead of nothing (§6). The old spelling is
+removed, not aliased, on the §11.1 reasoning: `g3 link status claude` exits 2
+with `link status takes no arguments`.
+
 ## 12. Deferred
 
 **Deliberately absent, not merely unbuilt:** `--force` and any other
@@ -578,13 +612,14 @@ Genuinely deferred:
 
 | Item | Blocked on / note |
 |---|---|
-| `g3 edit <name>` | `g3 path` piped into an editor covers it; revisit only if the pipe chafes |
+| `g3 edit <name>` | `g3 link path` piped into an editor covers it; revisit only if the pipe chafes |
 | A distinct exit code for refusals | Would break 001 §4.5's 0/1/2 contract; revisit if scripts need it without parsing stderr (§3) |
 | A `bucket-missing` state | Row 3 absorbs a dead gist today (§5.1); split it if the misleading status line proves annoying |
-| Resolving links by path (`g3 push ~/.zshrc`) | Wanted for tab-completion; needs a name-vs-path disambiguation rule |
+| Resolving links by path (`g3 link push ~/.zshrc`) | Wanted for tab-completion; needs a name-vs-path disambiguation rule |
 | Symlink-aware writes, atomic rename, mode preservation | Interacts: `EvalSymlinks` + temp-rename preserves the symlink but drops the mode, which `os.WriteFile` currently keeps for free (§7) |
 | Directory ⟷ bucket mounts | Drags in delete propagation, per-file state, partial-failure semantics — its own document |
 | Per-bucket batching for `status` | Needs an engine multi-key read (§5.3) |
+| A filter argument for `status` | `grep` over the table covers it; revisit only if a link count makes N round trips hurt (§5.3) |
 | `status` exit code reflecting sync state | `git diff --quiet` shaped; only if scripting demand appears |
 | Bucket alias table (`g3://claude/…`) | A link names a file, a bucket alias names a gist; `@name` (§6) covers the file case, so this stays separable — and unbuilt until `ls`/`rm` make the bucket case bite |
 

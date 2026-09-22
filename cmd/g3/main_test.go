@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -58,35 +59,35 @@ func TestRunUsageErrors(t *testing.T) {
 	// is what comes back.
 	creds := errors.New("no credentials")
 	for name, args := range map[string][]string{
-		"no args":              {},
-		"unknown command":      {"mv", "a", "b"},
-		"cp arity one":         {"cp", "only-one"},
-		"cp arity three":       {"cp", "a", "b", "c"},
-		"ls two arguments":     {"ls", "g3://a", "g3://b"},
-		"ls local argument":    {"ls", "somedir"},
-		"ls stdio argument":    {"ls", "-"},
-		"ls foreign scheme":    {"ls", "s3://b"},
-		"local to local":       {"cp", "a.txt", "b.txt"},
-		"stdin to stdout":      {"cp", "-", "-"},
-		"stdin to local":       {"cp", "-", "a.txt"},
-		"local to stdout":      {"cp", "a.txt", "-"},
-		"bare-bucket source":   {"cp", "g3://abc123", "out.txt"},
-		"prefix source":        {"cp", "g3://abc123/x/", "out.txt"},
-		"stdin to bare bucket": {"cp", "-", "g3://abc123"},
-		"stdin to prefix":      {"cp", "-", "g3://abc123/x/"},
-		"empty gist id":        {"cp", "g3:///k", "out.txt"},
-		"foreign scheme":       {"cp", "s3://b/k", "out.txt"},
-		"link no subcommand":   {"link"},
-		"link unknown sub":     {"link", "mv", "x"},
-		"link add arity":       {"link", "add", "n", "g3://b/k"},
-		"link ls with arg":     {"link", "ls", "x"},
-		"link rm arity":        {"link", "rm"},
-		"path no name":         {"path"},
-		"path two names":       {"path", "a", "b"},
-		"status two names":     {"status", "a", "b"},
-		"pull no name":         {"pull"},
-		"pull two names":       {"pull", "a", "b"},
-		"push no name":         {"push"},
+		"no args":               {},
+		"unknown command":       {"mv", "a", "b"},
+		"cp arity one":          {"cp", "only-one"},
+		"cp arity three":        {"cp", "a", "b", "c"},
+		"ls two arguments":      {"ls", "g3://a", "g3://b"},
+		"ls local argument":     {"ls", "somedir"},
+		"ls stdio argument":     {"ls", "-"},
+		"ls foreign scheme":     {"ls", "s3://b"},
+		"local to local":        {"cp", "a.txt", "b.txt"},
+		"stdin to stdout":       {"cp", "-", "-"},
+		"stdin to local":        {"cp", "-", "a.txt"},
+		"local to stdout":       {"cp", "a.txt", "-"},
+		"bare-bucket source":    {"cp", "g3://abc123", "out.txt"},
+		"prefix source":         {"cp", "g3://abc123/x/", "out.txt"},
+		"stdin to bare bucket":  {"cp", "-", "g3://abc123"},
+		"stdin to prefix":       {"cp", "-", "g3://abc123/x/"},
+		"empty gist id":         {"cp", "g3:///k", "out.txt"},
+		"foreign scheme":        {"cp", "s3://b/k", "out.txt"},
+		"link no subcommand":    {"link"},
+		"link unknown sub":      {"link", "mv", "x"},
+		"link add arity":        {"link", "add", "n", "g3://b/k"},
+		"link ls with arg":      {"link", "ls", "x"},
+		"link rm arity":         {"link", "rm"},
+		"link path no name":     {"link", "path"},
+		"link path two names":   {"link", "path", "a", "b"},
+		"link status with name": {"link", "status", "a"},
+		"link pull no name":     {"link", "pull"},
+		"link pull two names":   {"link", "pull", "a", "b"},
+		"link push no name":     {"link", "push"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := run(ctx, args, failingClient(creds), strings.NewReader(""), io.Discard, io.Discard)
@@ -95,6 +96,19 @@ func TestRunUsageErrors(t *testing.T) {
 				t.Errorf("run(%v) = %v, want *usageError", args, err)
 			}
 		})
+	}
+}
+
+// Asserts the message, not just the type: an unknown-link usage error would
+// otherwise pass this vacuously (docs/004 §11.1).
+func TestRetiredTopLevelLinkSpellings(t *testing.T) {
+	setConfigDir(t)
+	for _, cmd := range []string{"path", "status", "pull", "push"} {
+		err := run(ctx, []string{cmd, "a"}, failingClient(errors.New("must not be constructed")), strings.NewReader(""), io.Discard, io.Discard)
+		var ue *usageError
+		if !errors.As(err, &ue) || !strings.Contains(err.Error(), fmt.Sprintf("unknown command %q", cmd)) {
+			t.Errorf("g3 %s a = %v, want the unknown-command usage error", cmd, err)
+		}
 	}
 }
 

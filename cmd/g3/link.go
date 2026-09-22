@@ -118,9 +118,8 @@ func dropBaseline(name string) error {
 	return saveState(st)
 }
 
-// linkPath prints the expanded absolute path and nothing else, so
-// $(g3 path <name>) is safe to interpolate. It does not check that the file
-// exists; status is for that.
+// linkPath prints the expanded path and nothing else, so
+// $(g3 link path <name>) is safe to interpolate. Does not check existence.
 func linkPath(name string, stdout io.Writer) error {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -152,9 +151,7 @@ func lookupLink(cfg *gists3.Config, name string) (gists3.Link, error) {
 
 // expandAlias rewrites "@<name>" to that link's URI — always the remote half,
 // wherever the argument appears, since the local half already has a spelling
-// in $(g3 path <name>). Anything without the sigil is returned untouched and
-// unread, so a command that was given no alias never opens the config file
-// (docs/004 §6).
+// in $(g3 link path <name>). No sigil means no config read (docs/004 §6).
 func expandAlias(arg string) (string, error) {
 	name, ok := strings.CutPrefix(arg, aliasPrefix)
 	if !ok {
