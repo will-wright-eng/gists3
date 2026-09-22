@@ -74,7 +74,7 @@ compare-and-swap.
 g3 link add <name> g3://<gist-id>/<key> <path>   declare a link (no network)
 g3 link ls                                       list declarations
 g3 link rm <name>                                remove a declaration only
-g3 link status [<name>]                          report sync state
+g3 link status                                   report sync state, all links
 g3 link pull <name>                              remote → local, if safe
 g3 link push <name>                              local → remote, if safe
 g3 link path <name>                              print the local path
@@ -245,7 +245,7 @@ diff $(g3 link path claude) <(g3 cp @claude -)
 g3 cp $(g3 link path claude) @claude    # local wins
 g3 cp @claude $(g3 link path claude)    # remote wins
 
-g3 link status claude                   # L == R → row 4 → baseline adopted
+g3 link status                          # L == R → row 4 → baseline adopted
 ```
 
 Both halves of the link are named, not typed: `@claude` for the gist,
@@ -259,8 +259,7 @@ link heals itself and `pull`/`push` work again. No repair subcommand, no
 
 ### 5.3 Cost
 
-One `GetObject` per link — `status` with no argument is N round trips for N
-links. `HeadObject` is not an optimization; its godoc says so outright
+One `GetObject` per link — `status` is N round trips for N links. `HeadObject` is not an optimization; its godoc says so outright
 (`operations.go:248`: *"It is NOT cheaper than GetObject"*), because the Gist
 API has no metadata endpoint and both calls fetch the whole gist.
 
@@ -304,9 +303,11 @@ unlinked: claude
   kept g3://b1e652a05136107f461cd796103508cc/CLAUDE.md
 ```
 
-### `g3 link status [<name>]`
+### `g3 link status`
 
-State, name, path — one line per link, name-sorted. With a name, just that one.
+State, name, path — one line per link, name-sorted. Like `ls` with no URI,
+it takes no argument and reports the whole table; a single link is
+`g3 link status | grep claude`.
 
 ```
 in-sync        claude   ~/.claude/CLAUDE.md
@@ -315,6 +316,11 @@ remote-ahead   gitcfg   ~/.gitconfig
 diverged       notes    ~/notes/scratch.md
 remote-missing new      ~/new.md
 ```
+
+An empty link table prints `no links to evaluate; declare one with g3 link
+add` and exits 0. Silence would be the terser answer, but it reads as a
+command that failed to find something; the note names the state and the way
+out, like every other `g3` message (001 §4.5).
 
 States are the hyphenated labels from §5.1 — greppable, fixed vocabulary.
 `status` exits 0 whatever states it finds; only a failure to complete the
@@ -585,6 +591,17 @@ documenting both forever. `g3 push claudemd` now exits 2 with
 `unknown command "push"`. The migration is a `sed` over your aliases and
 scripts — insert `link` after `g3`.
 
+## 11.2 Amendment — `link status` takes no name (2026-09-21)
+
+`g3 link status [<name>]` is now `g3 link status`: no argument, every link,
+the shape `ls` already has. The optional name bought a filter that `grep`
+does better, and it cost the command a second mode — validate-the-name,
+exit-2-on-a-miss — for a report whose whole point is the table.
+
+An empty table now prints a note instead of nothing (§6). The old spelling is
+removed, not aliased, on the §11.1 reasoning: `g3 link status claude` exits 2
+with `link status takes no arguments`.
+
 ## 12. Deferred
 
 **Deliberately absent, not merely unbuilt:** `--force` and any other
@@ -602,6 +619,7 @@ Genuinely deferred:
 | Symlink-aware writes, atomic rename, mode preservation | Interacts: `EvalSymlinks` + temp-rename preserves the symlink but drops the mode, which `os.WriteFile` currently keeps for free (§7) |
 | Directory ⟷ bucket mounts | Drags in delete propagation, per-file state, partial-failure semantics — its own document |
 | Per-bucket batching for `status` | Needs an engine multi-key read (§5.3) |
+| A filter argument for `status` | `grep` over the table covers it; revisit only if a link count makes N round trips hurt (§5.3) |
 | `status` exit code reflecting sync state | `git diff --quiet` shaped; only if scripting demand appears |
 | Bucket alias table (`g3://claude/…`) | A link names a file, a bucket alias names a gist; `@name` (§6) covers the file case, so this stays separable — and unbuilt until `ls`/`rm` make the bucket case bite |
 

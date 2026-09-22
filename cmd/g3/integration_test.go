@@ -163,7 +163,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 	})
 
 	eventually(t, "status in-sync", func() error {
-		out, stderr, err := g3("link", "status", "it")
+		out, stderr, err := g3("link", "status")
 		if err != nil {
 			return fmt.Errorf("%v: %s", err, stderr)
 		}

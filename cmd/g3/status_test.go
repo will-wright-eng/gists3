@@ -81,7 +81,7 @@ func TestStatusStates(t *testing.T) {
 				}
 				w.Write(gistJSON(t, "abc123", files))
 			})
-			out, err := runStatus(t, stubClient(client), "l1")
+			out, err := runStatus(t, stubClient(client))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,7 +108,7 @@ func TestStatusAdoptsBaselineOnInSync(t *testing.T) {
 	mux.HandleFunc("GET /gists/abc123", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(gistJSON(t, "abc123", map[string]string{"f.md": content}))
 	})
-	if _, err := runStatus(t, stubClient(client), "l1"); err != nil {
+	if _, err := runStatus(t, stubClient(client)); err != nil {
 		t.Fatal(err)
 	}
 	st, err := loadState()
@@ -194,10 +194,10 @@ func TestStatusAbortsOnGlobalError(t *testing.T) {
 	}
 }
 
-func TestStatusUnknownNameIsUsage(t *testing.T) {
-	// Validation precedes client construction: exit 2 with no credentials.
+func TestStatusRejectsAnArgument(t *testing.T) {
+	// Arity is checked before client construction: exit 2 with no credentials.
 	setConfigDir(t)
-	_, err := runStatus(t, failingClient(errors.New("no credentials")), "nope")
+	_, err := runStatus(t, failingClient(errors.New("no credentials")), "l1")
 	var ue *usageError
 	if !errors.As(err, &ue) {
 		t.Errorf("err = %v, want *usageError", err)
@@ -208,10 +208,10 @@ func TestStatusNoLinksNoClient(t *testing.T) {
 	setConfigDir(t)
 	out, err := runStatus(t, failingClient(errors.New("must not be constructed")))
 	if err != nil {
-		t.Fatalf("status with no links = %v, want silence and exit 0", err)
+		t.Fatalf("status with no links = %v, want a note and exit 0", err)
 	}
-	if out != "" {
-		t.Errorf("out = %q, want nothing", out)
+	if !strings.HasPrefix(out, "no links to evaluate") {
+		t.Errorf("out = %q, want the empty-table note", out)
 	}
 }
 

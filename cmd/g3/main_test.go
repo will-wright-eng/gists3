@@ -84,7 +84,7 @@ func TestRunUsageErrors(t *testing.T) {
 		"link rm arity":         {"link", "rm"},
 		"link path no name":     {"link", "path"},
 		"link path two names":   {"link", "path", "a", "b"},
-		"link status two names": {"link", "status", "a", "b"},
+		"link status with name": {"link", "status", "a"},
 		"link pull no name":     {"link", "pull"},
 		"link pull two names":   {"link", "pull", "a", "b"},
 		"link push no name":     {"link", "push"},

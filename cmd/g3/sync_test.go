@@ -141,7 +141,7 @@ func TestPullPushLifecycle(t *testing.T) {
 	}
 
 	gist.set("CLAUDE.md", "v3\n")
-	if out := mustRunG3(t, client, "link", "status", "claude"); !strings.HasPrefix(out, "remote-ahead") {
+	if out := mustRunG3(t, client, "link", "status"); !strings.HasPrefix(out, "remote-ahead") {
 		t.Errorf("status = %q, want remote-ahead", out)
 	}
 	mustRunG3(t, client, "link", "pull", "claude")
@@ -172,7 +172,7 @@ func TestPullPushLifecycle(t *testing.T) {
 
 	// §5.2 recovery: pick a winner with cp, then row 4 heals on status.
 	mustRunG3(t, client, "cp", local, "g3://abc123/CLAUDE.md")
-	if out := mustRunG3(t, client, "link", "status", "claude"); !strings.HasPrefix(out, "in-sync") {
+	if out := mustRunG3(t, client, "link", "status"); !strings.HasPrefix(out, "in-sync") {
 		t.Errorf("status after reconcile = %q, want in-sync", out)
 	}
 	if out := mustRunG3(t, client, "link", "push", "claude"); out != "in-sync: claude\n" {

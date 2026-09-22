@@ -83,7 +83,7 @@ vim $(g3 link path claudemd)    # edit the file where it lives
 g3 link push claudemd           # local → remote, if safe
 g3 cp @claudemd -               # @<link> is that link's URI, on either
                                 #   side of cp — no ID typed
-g3 link status                  # per link: in-sync / local-ahead /
+g3 link status                  # every link: in-sync / local-ahead /
                                 #   remote-ahead / diverged / local-missing /
                                 #   remote-missing / missing
 g3 link ls                      # list declarations
@@ -105,7 +105,7 @@ for the gist, `$(g3 link path claudemd)` for the file:
 diff $(g3 link path claudemd) <(g3 cp @claudemd -)  # see the difference
 g3 cp $(g3 link path claudemd) @claudemd            # local wins
 g3 cp @claudemd $(g3 link path claudemd)            # remote wins
-g3 link status claudemd                             # → in-sync, baseline adopted
+g3 link status                                      # → in-sync, baseline adopted
 ```
 
 `@<link>` always means the link's **remote URI**, whichever side of `cp` it

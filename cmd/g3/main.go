@@ -34,7 +34,7 @@ commands:
                              the local file
   link path <name>           print a link's local path, ~ expanded, for
                              $(g3 link path <name>) interpolation
-  link status [<name>]       report each link's sync state against the last
+  link status                report every link's sync state against the last
                              agreed baseline (docs/004-linked-paths.md §5)
   link pull <name>           update the local file from the gist, when only
                              the remote moved since the last sync
@@ -142,14 +142,10 @@ func runLink(ctx context.Context, args []string, newClient clientFn, stdout io.W
 		}
 		return linkPath(args[1], stdout)
 	case "status":
-		if len(args) > 2 {
-			return usagef("link status takes at most one link name\n%s", usage)
+		if len(args) != 1 {
+			return usagef("link status takes no arguments\n%s", usage)
 		}
-		name := ""
-		if len(args) == 2 {
-			name = args[1]
-		}
-		return cmdStatus(ctx, newClient, name, stdout)
+		return cmdStatus(ctx, newClient, stdout)
 	case "pull":
 		if len(args) != 2 {
 			return usagef("link pull takes exactly a link name\n%s", usage)
