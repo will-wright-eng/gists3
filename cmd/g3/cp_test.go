@@ -280,6 +280,127 @@ func TestCPRemoteCopy(t *testing.T) {
 	}
 }
 
+// linkFor declares a link in the already-redirected config dir. The path half
+// is never read by cp, which only ever expands an alias to the URI.
+func linkFor(t *testing.T, name, uri string) {
+	t.Helper()
+	if err := linkAdd(name, uri, "/unused/"+name+".md", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCPAliasSource(t *testing.T) {
+	setConfigDir(t)
+	linkFor(t, "claudemd", "g3://abc123/CLAUDE.md")
+	mux, client := newServer(t)
+	mux.HandleFunc("GET /gists/abc123", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(gistJSON(t, "abc123", map[string]string{"CLAUDE.md": "# notes\n"}))
+	})
+	stdout, err := runCP(t, client, "@claudemd", "-", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# notes\n"; stdout != want {
+		t.Errorf("stdout = %q, want the body bytes only", stdout)
+	}
+}
+
+func TestCPAliasDestination(t *testing.T) {
+	setConfigDir(t)
+	linkFor(t, "claudemd", "g3://abc123/CLAUDE.md")
+	mux, client := newServer(t)
+	got := handlePatch(t, mux, "abc123")
+	src := writeSrc(t, "in.md", "# edited\n")
+	stdout, err := runCP(t, client, src, "@claudemd", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := got.Files["CLAUDE.md"].Content; c != "# edited\n" {
+		t.Errorf("uploaded under CLAUDE.md = %q; PATCH keys = %v", c, got.Files)
+	}
+	// The status line names the resolved URI, not the alias: what the copy
+	// actually touched is what gets reported.
+	if want := "upload: " + src + " to g3://abc123/CLAUDE.md\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestCPAliasBothSides(t *testing.T) {
+	setConfigDir(t)
+	linkFor(t, "from", "g3://src123/a.txt")
+	linkFor(t, "to", "g3://dst456/b.txt")
+	mux, client := newServer(t)
+	mux.HandleFunc("GET /gists/src123", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(gistJSON(t, "src123", map[string]string{"a.txt": "copy me"}))
+	})
+	got := handlePatch(t, mux, "dst456")
+	stdout, err := runCP(t, client, "@from", "@to", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := got.Files["b.txt"].Content; c != "copy me" {
+		t.Errorf("copied content = %q; PATCH keys = %v", c, got.Files)
+	}
+	if want := "copy: g3://src123/a.txt to g3://dst456/b.txt\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+func TestCPAliasUsageErrors(t *testing.T) {
+	setConfigDir(t)
+	linkFor(t, "claudemd", "g3://abc123/CLAUDE.md")
+	client := unreachableClient()
+	for name, args := range map[string][2]string{
+		"unknown source":      {"@nope", "out.txt"},
+		"unknown destination": {"in.txt", "@nope"},
+		"bare sigil":          {"@", "out.txt"},
+		// A link names one file, so there is no "@name/<key>" form: the whole
+		// argument after "@" is the link name, and this one is not declared.
+		"suffixed alias": {"@claudemd/other.md", "out.txt"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := runCP(t, client, args[0], args[1], "")
+			wantUsageError(t, err)
+		})
+	}
+}
+
+func TestCPAliasEscapeHatch(t *testing.T) {
+	// Only a leading "@" is a sigil, so a local file named "@claudemd" stays
+	// reachable as "./@claudemd" — the escape hatch "-" already documents.
+	setConfigDir(t)
+	linkFor(t, "claudemd", "g3://abc123/CLAUDE.md")
+	src, _, err := classify("./@claudemd", "g3://abc123/k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src.kind != locLocal || src.path != "./@claudemd" {
+		t.Errorf("src = %+v, want the literal local path ./@claudemd", src)
+	}
+}
+
+func TestCPAliasMalformedConfigIsFatalNotUsage(t *testing.T) {
+	// An unresolvable alias is a usage error; an unreadable config file is a
+	// runtime one — the same split link.go draws.
+	writeConfig(t, `{not json`)
+	_, err := runCP(t, unreachableClient(), "@claudemd", "-", "")
+	var ue *usageError
+	if err == nil || errors.As(err, &ue) {
+		t.Errorf("err = %v, want a non-usage runtime error", err)
+	}
+}
+
+func TestClassifyWithoutAliasIgnoresConfig(t *testing.T) {
+	// Only an alias opens the config file, so classification stays a function
+	// of the arguments alone and a broken config cannot turn a well-formed
+	// invocation into a usage error. The command still fails later — newClient
+	// reads the same file for base_url — but it fails as a runtime error.
+	writeConfig(t, `{not json`)
+	if _, _, err := classify("in.txt", "g3://abc123/conf.json"); err != nil {
+		t.Errorf("classify with a malformed config = %v, want it unread", err)
+	}
+}
+
 func TestCPUploadGuards(t *testing.T) {
 	client := unreachableClient()
 	t.Run("empty file", func(t *testing.T) {

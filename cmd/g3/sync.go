@@ -29,9 +29,9 @@ func loadLink(ctx context.Context, newClient clientFn, name string) (*linkSync, 
 	if err != nil {
 		return nil, err
 	}
-	l, ok := cfg.Links[name]
-	if !ok {
-		return nil, usagef("unknown link %q; g3 link ls shows the declared links", name)
+	l, err := lookupLink(cfg, name)
+	if err != nil {
+		return nil, err
 	}
 	st, err := loadState()
 	if err != nil {
