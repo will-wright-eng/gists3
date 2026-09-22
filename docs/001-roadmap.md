@@ -28,7 +28,7 @@ those get recorded as amendments, not reverted.
 | §3 directory structure | ⚠️ Code is *better* than the design; 000-design.md is stale (WP8) |
 | §9 v1.1 items (base64, retry) | ❌ Not started (WP3–WP4); `token_command` (WP2) is obsolete — 004 §8 left no token field for it to improve on |
 | §9 v1.2 items (VersionID, conditional writes) | ❌ Not started (WP5–WP6) |
-| §9 v2 CLI (`cmd/g3`) | ⚠️ `cp`, `ls`, `g3://` URIs, and the [004](004-linked-paths.md) link set (`link`, `status`, `pull`, `push`, `path`) shipped *(2026-08-27)*; `rm` and `--help` remain (WP1) |
+| §9 v2 CLI (`cmd/g3`) | ⚠️ `cp`, `ls`, `g3://` URIs, and the [004](004-linked-paths.md) link set (`link` with `add`, `ls`, `rm`, `path`, `status`, `pull`, `push`) shipped *(2026-08-27)*; `rm` and `--help` remain (WP1) |
 | §8 encryption example | ❌ Not written (WP7) |
 
 ## 3. Design amendments (code wins, 000-design.md updates)

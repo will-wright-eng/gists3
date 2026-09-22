@@ -140,7 +140,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 	mustG3("link", "add", "it", uri, local)
 
 	// $(g3 path it) is the editor contract: exactly the expanded path.
-	if got := mustG3("path", "it"); got != local+"\n" {
+	if got := mustG3("link", "path", "it"); got != local+"\n" {
 		t.Fatalf("path = %q, want %q", got, local)
 	}
 
@@ -151,7 +151,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 	if err := os.WriteFile(local, []byte("v1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	g3Eventually("push", "push", "it")
+	g3Eventually("push", "link", "push", "it")
 	eventually(t, "GetObject after push", func() error {
 		got, err := readRemote(ctx, client, bucket, "it.md")
 		if err != nil {
@@ -164,7 +164,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 	})
 
 	eventually(t, "status in-sync", func() error {
-		out, stderr, err := g3("status", "it")
+		out, stderr, err := g3("link", "status", "it")
 		if err != nil {
 			return fmt.Errorf("%v: %s", err, stderr)
 		}
@@ -180,7 +180,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 		return err
 	})
 	eventually(t, "pull after remote edit", func() error {
-		if _, stderr, err := g3("pull", "it"); err != nil {
+		if _, stderr, err := g3("link", "pull", "it"); err != nil {
 			return fmt.Errorf("%v: %s", err, stderr)
 		}
 		b, err := os.ReadFile(local)
@@ -198,7 +198,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 	if err := os.WriteFile(local, []byte("v3\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, stderr, err := g3("pull", "it")
+	_, stderr, err := g3("link", "pull", "it")
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
 		t.Fatalf("pull with local edits = %v, want exit 1", err)
@@ -210,7 +210,7 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 		t.Fatalf("local = %q; a refusal must change nothing", b)
 	}
 
-	g3Eventually("push local edit", "push", "it")
+	g3Eventually("push local edit", "link", "push", "it")
 
 	// rm keeps both sides.
 	mustG3("link", "rm", "it")

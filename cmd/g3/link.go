@@ -114,7 +114,7 @@ func dropBaseline(name string) error {
 }
 
 // linkPath prints the expanded absolute path and nothing else, so
-// $(g3 path <name>) is safe to interpolate. It does not check that the file
+// $(g3 link path <name>) is safe to interpolate. It does not check that the file
 // exists; status is for that.
 func linkPath(name string, stdout io.Writer) error {
 	cfg, err := loadConfig()

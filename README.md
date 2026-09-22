@@ -20,7 +20,8 @@ date | g3 cp - g3://<gist-id>/last-run      # stdin; "-" also means stdout
 g3 cp g3://<gist-id>/conf.json - | jq .     # body only — status lines are
                                             # suppressed when either end is "-"
 g3 link add claudemd g3://<gist-id>/CLAUDE.md ~/.claude/CLAUDE.md
-vim $(g3 path claudemd) && g3 push claudemd # linked paths: no ID, no scratch
+vim $(g3 link path claudemd) \
+  && g3 link push claudemd                  # linked paths: no ID, no scratch
                                             # file, no mv (below)
 ```
 
@@ -75,10 +76,10 @@ twice:
 
 ```sh
 g3 link add claudemd g3://b1e652a05136107f461cd796103508cc/CLAUDE.md ~/.claude/CLAUDE.md
-g3 pull claudemd                # remote → local, if safe
-vim $(g3 path claudemd)         # edit the file where it lives
-g3 push claudemd                # local → remote, if safe
-g3 status                       # per link: in-sync / local-ahead /
+g3 link pull claudemd           # remote → local, if safe
+vim $(g3 link path claudemd)    # edit the file where it lives
+g3 link push claudemd           # local → remote, if safe
+g3 link status                  # per link: in-sync / local-ahead /
                                 #   remote-ahead / diverged / local-missing /
                                 #   remote-missing / missing
 g3 link ls                      # list declarations

@@ -91,13 +91,13 @@ func cmdPull(ctx context.Context, newClient clientFn, name string, stdout io.Wri
 		return nil
 	case stateRemoteMissing:
 		return refuse(name, s.ls.state, "there is no remote object to pull",
-			fmt.Sprintf("g3 push %s creates it.", name))
+			fmt.Sprintf("g3 link push %s creates it.", name))
 	case stateLocalAhead:
 		return refuse(name, s.ls.state, "the local file changed since the last sync, and pulling would overwrite that work",
-			fmt.Sprintf("Push with g3 push %s, or reconcile with g3 cp, then re-run g3 status.", name))
+			fmt.Sprintf("Push with g3 link push %s, or reconcile with g3 cp, then re-run g3 link status.", name))
 	case stateDiverged:
 		return refuse(name, s.ls.state, "local and remote both changed since the last sync",
-			"Reconcile with g3 cp, then re-run g3 status.")
+			"Reconcile with g3 cp, then re-run g3 link status.")
 	}
 	// stateLocalMissing or stateRemoteAhead: write the bytes the state was
 	// resolved against, cp's download way (created 0644, existing files keep
@@ -133,13 +133,13 @@ func cmdPush(ctx context.Context, newClient clientFn, name string, stdout io.Wri
 		return nil
 	case stateLocalMissing:
 		return refuse(name, s.ls.state, "there is no local file to push",
-			fmt.Sprintf("g3 pull %s creates it.", name))
+			fmt.Sprintf("g3 link pull %s creates it.", name))
 	case stateRemoteAhead:
 		return refuse(name, s.ls.state, "the remote changed since the last sync, and pushing would overwrite that edit",
-			fmt.Sprintf("Pull with g3 pull %s, or reconcile with g3 cp, then re-run g3 status.", name))
+			fmt.Sprintf("Pull with g3 link pull %s, or reconcile with g3 cp, then re-run g3 link status.", name))
 	case stateDiverged:
 		return refuse(name, s.ls.state, "local and remote both changed since the last sync",
-			"Reconcile with g3 cp, then re-run g3 status.")
+			"Reconcile with g3 cp, then re-run g3 link status.")
 	}
 	// stateRemoteMissing or stateLocalAhead: upload through readBody so push
 	// inherits cp's 10 MiB cap and UTF-8 guard — the same bytes to the same

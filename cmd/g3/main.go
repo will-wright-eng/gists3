@@ -31,13 +31,13 @@ commands:
   link ls                    list declared links
   link rm <name>             remove a declaration; keeps both the gist and
                              the local file
-  path <name>                print a link's local path, ~ expanded, for
-                             $(g3 path <name>) interpolation
-  status [<name>]            report each link's sync state against the last
+  link path <name>           print a link's local path, ~ expanded, for
+                             $(g3 link path <name>) interpolation
+  link status [<name>]       report each link's sync state against the last
                              agreed baseline (docs/004-linked-paths.md §5)
-  pull <name>                update the local file from the gist, when only
+  link pull <name>           update the local file from the gist, when only
                              the remote moved since the last sync
-  push <name>                update the gist from the local file, when only
+  link push <name>           update the gist from the local file, when only
                              the local side moved; neither command ever
                              overwrites work — diverged links are refused`
 
@@ -108,7 +108,7 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 		return lsBuckets(ctx, client, stdout)
 	case "link":
 		if len(args) < 2 {
-			return usagef("link needs a subcommand: add, ls, or rm\n%s", usage)
+			return usagef("link needs a subcommand: add, ls, rm, path, status, pull, or push\n%s", usage)
 		}
 		switch args[1] {
 		case "add":
@@ -126,31 +126,31 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 				return usagef("link rm takes exactly a link name\n%s", usage)
 			}
 			return linkRM(args[2], stdout)
+		case "path":
+			if len(args) != 3 {
+				return usagef("link path takes exactly a link name\n%s", usage)
+			}
+			return linkPath(args[2], stdout)
+		case "status":
+			if len(args) > 3 {
+				return usagef("link status takes at most one link name\n%s", usage)
+			}
+			name := ""
+			if len(args) == 3 {
+				name = args[2]
+			}
+			return cmdStatus(ctx, newClient, name, stdout)
+		case "pull", "push":
+			if len(args) != 3 {
+				return usagef("link %s takes exactly a link name\n%s", args[1], usage)
+			}
+			if args[1] == "pull" {
+				return cmdPull(ctx, newClient, args[2], stdout)
+			}
+			return cmdPush(ctx, newClient, args[2], stdout)
 		default:
-			return usagef("unknown link subcommand %q; want add, ls, or rm\n%s", args[1], usage)
+			return usagef("unknown link subcommand %q; want add, ls, rm, path, status, pull, or push\n%s", args[1], usage)
 		}
-	case "path":
-		if len(args) != 2 {
-			return usagef("path takes exactly a link name\n%s", usage)
-		}
-		return linkPath(args[1], stdout)
-	case "status":
-		if len(args) > 2 {
-			return usagef("status takes at most one link name\n%s", usage)
-		}
-		name := ""
-		if len(args) == 2 {
-			name = args[1]
-		}
-		return cmdStatus(ctx, newClient, name, stdout)
-	case "pull", "push":
-		if len(args) != 2 {
-			return usagef("%s takes exactly a link name\n%s", args[0], usage)
-		}
-		if args[0] == "pull" {
-			return cmdPull(ctx, newClient, args[1], stdout)
-		}
-		return cmdPush(ctx, newClient, args[1], stdout)
 	default:
 		return usagef("unknown command %q\n%s", args[0], usage)
 	}

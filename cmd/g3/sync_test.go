@@ -111,7 +111,7 @@ func TestPullPushLifecycle(t *testing.T) {
 	mux, client := newServer(t)
 	gist := serveGist(t, mux, "abc123", map[string]string{"CLAUDE.md": "v1\n"})
 
-	out := mustRunG3(t, client, "pull", "claude")
+	out := mustRunG3(t, client, "link", "pull", "claude")
 	if want := "pull: g3://abc123/CLAUDE.md to " + local + "\n"; out != want {
 		t.Errorf("pull output = %q, want %q", out, want)
 	}
@@ -122,14 +122,14 @@ func TestPullPushLifecycle(t *testing.T) {
 		t.Errorf("baseline = %q, want the hash of the transferred bytes", h)
 	}
 
-	if out := mustRunG3(t, client, "pull", "claude"); out != "in-sync: claude\n" {
+	if out := mustRunG3(t, client, "link", "pull", "claude"); out != "in-sync: claude\n" {
 		t.Errorf("second pull = %q, want the in-sync no-op", out)
 	}
 
 	if err := os.WriteFile(local, []byte("v2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out = mustRunG3(t, client, "push", "claude")
+	out = mustRunG3(t, client, "link", "push", "claude")
 	if want := "push: " + local + " to g3://abc123/CLAUDE.md\n"; out != want {
 		t.Errorf("push output = %q, want %q", out, want)
 	}
@@ -141,10 +141,10 @@ func TestPullPushLifecycle(t *testing.T) {
 	}
 
 	gist.set("CLAUDE.md", "v3\n")
-	if out := mustRunG3(t, client, "status", "claude"); !strings.HasPrefix(out, "remote-ahead") {
+	if out := mustRunG3(t, client, "link", "status", "claude"); !strings.HasPrefix(out, "remote-ahead") {
 		t.Errorf("status = %q, want remote-ahead", out)
 	}
-	mustRunG3(t, client, "pull", "claude")
+	mustRunG3(t, client, "link", "pull", "claude")
 	if b, _ := os.ReadFile(local); string(b) != "v3\n" {
 		t.Errorf("local after pull = %q, want v3", b)
 	}
@@ -155,7 +155,7 @@ func TestPullPushLifecycle(t *testing.T) {
 	}
 	gist.set("CLAUDE.md", "R\n")
 	for _, cmd := range []string{"pull", "push"} {
-		_, err := runG3(t, client, cmd, "claude")
+		_, err := runG3(t, client, "link", cmd, "claude")
 		if err == nil || !strings.Contains(err.Error(), "diverged") {
 			t.Fatalf("%s on diverged = %v, want a refusal naming the state", cmd, err)
 		}
@@ -172,10 +172,10 @@ func TestPullPushLifecycle(t *testing.T) {
 
 	// §5.2 recovery: pick a winner with cp, then row 4 heals on status.
 	mustRunG3(t, client, "cp", local, "g3://abc123/CLAUDE.md")
-	if out := mustRunG3(t, client, "status", "claude"); !strings.HasPrefix(out, "in-sync") {
+	if out := mustRunG3(t, client, "link", "status", "claude"); !strings.HasPrefix(out, "in-sync") {
 		t.Errorf("status after reconcile = %q, want in-sync", out)
 	}
-	if out := mustRunG3(t, client, "push", "claude"); out != "in-sync: claude\n" {
+	if out := mustRunG3(t, client, "link", "push", "claude"); out != "in-sync: claude\n" {
 		t.Errorf("push after heal = %q, want the no-op", out)
 	}
 }
@@ -186,14 +186,14 @@ func TestPullRefusals(t *testing.T) {
 		local, remote, base string
 		wantState, wantWay  string
 	}{
-		"remote-missing":       {local: content, wantState: "remote-missing", wantWay: "g3 push claude"},
-		"local-ahead":          {local: content, remote: other, base: sha256hex(other), wantState: "local-ahead", wantWay: "g3 push claude"},
+		"remote-missing":       {local: content, wantState: "remote-missing", wantWay: "g3 link push claude"},
+		"local-ahead":          {local: content, remote: other, base: sha256hex(other), wantState: "local-ahead", wantWay: "g3 link push claude"},
 		"diverged":             {local: content, remote: other, base: "stale", wantState: "diverged", wantWay: "g3 cp"},
 		"diverged no baseline": {local: content, remote: other, wantState: "diverged", wantWay: "g3 cp"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gist, client, local := setupSync(t, tc.local, tc.remote, tc.base)
-			_, err := runG3(t, client, "pull", "claude")
+			_, err := runG3(t, client, "link", "pull", "claude")
 			assertRefusal(t, err, tc.wantState, tc.wantWay)
 			if b, _ := os.ReadFile(local); string(b) != tc.local {
 				t.Errorf("local = %q, want untouched %q", b, tc.local)
@@ -214,14 +214,14 @@ func TestPushRefusals(t *testing.T) {
 		local, remote, base string
 		wantState, wantWay  string
 	}{
-		"local-missing":        {remote: content, wantState: "local-missing", wantWay: "g3 pull claude"},
-		"remote-ahead":         {local: content, remote: other, base: sha256hex(content), wantState: "remote-ahead", wantWay: "g3 pull claude"},
+		"local-missing":        {remote: content, wantState: "local-missing", wantWay: "g3 link pull claude"},
+		"remote-ahead":         {local: content, remote: other, base: sha256hex(content), wantState: "remote-ahead", wantWay: "g3 link pull claude"},
 		"diverged":             {local: content, remote: other, base: "stale", wantState: "diverged", wantWay: "g3 cp"},
 		"diverged no baseline": {local: content, remote: other, wantState: "diverged", wantWay: "g3 cp"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gist, client, local := setupSync(t, tc.local, tc.remote, tc.base)
-			_, err := runG3(t, client, "push", "claude")
+			_, err := runG3(t, client, "link", "push", "claude")
 			assertRefusal(t, err, tc.wantState, tc.wantWay)
 			if got := gist.get("f.md"); got != tc.remote {
 				t.Errorf("remote = %q, want untouched %q", got, tc.remote)
@@ -280,7 +280,7 @@ func assertRefusal(t *testing.T, err error, state, wayOut string) {
 func TestPullPushBothMissing(t *testing.T) {
 	_, client, _ := setupSync(t, "", "", "")
 	for _, cmd := range []string{"pull", "push"} {
-		_, err := runG3(t, client, cmd, "claude")
+		_, err := runG3(t, client, "link", cmd, "claude")
 		if err == nil || !strings.Contains(err.Error(), "both missing") {
 			t.Errorf("%s = %v, want the row-1 both-missing error", cmd, err)
 		}
@@ -294,7 +294,7 @@ func TestPushNonUTF8MatchesCP(t *testing.T) {
 	if err := os.WriteFile(local, []byte{0xff, 0xfe, 0xfd}, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, pushErr := runG3(t, client, "push", "claude")
+	_, pushErr := runG3(t, client, "link", "push", "claude")
 	_, cpErr := runG3(t, client, "cp", local, "g3://abc123/f.md")
 	if pushErr == nil || cpErr == nil {
 		t.Fatalf("push = %v, cp = %v; both must refuse non-UTF-8", pushErr, cpErr)
@@ -313,7 +313,7 @@ func TestPushNonUTF8MatchesCP(t *testing.T) {
 func TestPushDeadGistFailsWithAPINotFound(t *testing.T) {
 	gist, client, _ := setupSync(t, "hello\n", "", "")
 	gist.gone = true
-	_, err := runG3(t, client, "push", "claude")
+	_, err := runG3(t, client, "link", "push", "claude")
 	var nf *gists3.NotFoundError
 	if !errors.As(err, &nf) {
 		t.Fatalf("err = %v, want the API's own *NotFoundError (§5.1 row 3 note)", err)
@@ -329,7 +329,7 @@ func TestPullKeepsExistingMode(t *testing.T) {
 	}
 	const content, other = "hello\n", "other\n"
 	_, client, local := setupSync(t, content, other, sha256hex(content)) // remote-ahead
-	mustRunG3(t, client, "pull", "claude")
+	mustRunG3(t, client, "link", "pull", "claude")
 	if b, _ := os.ReadFile(local); string(b) != other {
 		t.Fatalf("local = %q, want the pulled content", b)
 	}

@@ -17,7 +17,7 @@ import (
 func runStatus(t *testing.T, client clientFn, args ...string) (string, error) {
 	t.Helper()
 	var stdout bytes.Buffer
-	err := run(ctx, append([]string{"status"}, args...), client, strings.NewReader(""), &stdout, io.Discard)
+	err := run(ctx, append([]string{"link", "status"}, args...), client, strings.NewReader(""), &stdout, io.Discard)
 	return stdout.String(), err
 }
 
