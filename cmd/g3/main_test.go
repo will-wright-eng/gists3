@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -87,10 +88,6 @@ func TestRunUsageErrors(t *testing.T) {
 		"link pull no name":     {"link", "pull"},
 		"link pull two names":   {"link", "pull", "a", "b"},
 		"link push no name":     {"link", "push"},
-		"path top level":        {"path", "a"},
-		"status top level":      {"status"},
-		"pull top level":        {"pull", "a"},
-		"push top level":        {"push", "a"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := run(ctx, args, failingClient(creds), strings.NewReader(""), io.Discard, io.Discard)
@@ -99,6 +96,19 @@ func TestRunUsageErrors(t *testing.T) {
 				t.Errorf("run(%v) = %v, want *usageError", args, err)
 			}
 		})
+	}
+}
+
+// The link verbs moved under "link" (docs/004 §11.1); asserting the message
+// keeps this from passing on an unknown-link usage error instead.
+func TestRetiredTopLevelLinkSpellings(t *testing.T) {
+	setConfigDir(t)
+	for _, cmd := range []string{"path", "status", "pull", "push"} {
+		err := run(ctx, []string{cmd, "a"}, failingClient(errors.New("must not be constructed")), strings.NewReader(""), io.Discard, io.Discard)
+		var ue *usageError
+		if !errors.As(err, &ue) || !strings.Contains(err.Error(), fmt.Sprintf("unknown command %q", cmd)) {
+			t.Errorf("g3 %s a = %v, want the unknown-command usage error", cmd, err)
+		}
 	}
 }
 

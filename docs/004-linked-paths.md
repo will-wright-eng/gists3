@@ -1,6 +1,6 @@
-# 004 — Linked paths: `pull`, `push`, `status`
+# 004 — Linked paths: `link pull`, `link push`, `link status`
 
-**Status:** Draft v0.2 (2026-08-26)
+**Status:** Draft v0.3 (2026-09-21)
 **Scope:** `cmd/g3`, plus removal of config-file token auth from
 `internal/gists3` (§8); no new module dependencies
 **Depends on:** [003-cli-first.md](003-cli-first.md) (CLI verbs need not be S3
@@ -570,6 +570,20 @@ package-level seam.
 - [ ] `make check` green at every stage; zero new module dependencies.
 
 ---
+
+## 11.1 Amendment — the link commands moved under `link` (2026-09-21)
+
+`status`, `pull`, `push`, and `path` shipped as top-level commands and are now
+subcommands of `link`: `g3 link status`, `g3 link pull`, `g3 link push`,
+`g3 link path`. One feature gets one namespace — `link add`/`ls`/`rm` already
+lived there, and four sibling verbs at top level made the surface read as if
+they were general-purpose rather than link-specific.
+
+The old spellings are **removed outright**, not aliased, on the same reasoning
+as §8: there are no release tags yet, and carrying two spellings would mean
+documenting both forever. `g3 push claudemd` now exits 2 with
+`unknown command "push"`. The migration is a `sed` over your aliases and
+scripts — insert `link` after `g3`.
 
 ## 12. Deferred
 

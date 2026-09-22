@@ -61,7 +61,7 @@ Three boundaries carry real rules:
 | `cp.go` | `classify` (alias expansion + pair validation) then upload/download/remoteCopy; `readBody` holds the 10 MiB cap and UTF-8 guard |
 | `link.go` | link table CRUD in `config.json`, `@<alias>` expansion, `writeFileAtomic` |
 | `state.go` | `resolve(local, remote, baseline)` — the sync-state table; baselines in `state.json` |
-| `status.go`, `sync.go` | `link status` / `pull` / `push` on top of `resolve` |
+| `status.go`, `sync.go` | `link status` / `link pull` / `link push` on top of `resolve` |
 
 Two invariants the tests enforce and that are easy to break:
 

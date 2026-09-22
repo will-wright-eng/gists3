@@ -345,11 +345,10 @@ func TestPullKeepsExistingMode(t *testing.T) {
 func TestPullPushUnknownNameIsUsage(t *testing.T) {
 	setConfigDir(t)
 	for _, cmd := range []string{"pull", "push"} {
-		var stdout bytes.Buffer
-		err := run(ctx, []string{cmd, "nope"}, failingClient(errors.New("must not be constructed")), strings.NewReader(""), &stdout, io.Discard)
+		err := run(ctx, []string{"link", cmd, "nope"}, failingClient(errors.New("must not be constructed")), strings.NewReader(""), io.Discard, io.Discard)
 		var ue *usageError
 		if !errors.As(err, &ue) {
-			t.Errorf("%s nope = %v, want *usageError before any client exists", cmd, err)
+			t.Errorf("link %s nope = %v, want *usageError before any client exists", cmd, err)
 		}
 	}
 }

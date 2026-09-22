@@ -42,6 +42,8 @@ commands:
                              the local side moved; neither command ever
                              overwrites work — diverged links are refused`
 
+const linkSubcommands = "add, ls, rm, path, status, pull, or push"
+
 // usageError marks a command-line mistake: main exits 2 for these and 1 for
 // every runtime failure.
 type usageError struct{ msg string }
@@ -108,51 +110,59 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 		}
 		return lsBuckets(ctx, client, stdout)
 	case "link":
-		if len(args) < 2 {
-			return usagef("link needs a subcommand: add, ls, rm, path, status, pull, or push\n%s", usage)
-		}
-		switch args[1] {
-		case "add":
-			if len(args) != 5 {
-				return usagef("link add takes a name, a g3://<gist-id>/<key> URI, and a local path\n%s", usage)
-			}
-			return linkAdd(args[2], args[3], args[4], stdout)
-		case "ls":
-			if len(args) != 2 {
-				return usagef("link ls takes no arguments\n%s", usage)
-			}
-			return linkLS(stdout)
-		case "rm":
-			if len(args) != 3 {
-				return usagef("link rm takes exactly a link name\n%s", usage)
-			}
-			return linkRM(args[2], stdout)
-		case "path":
-			if len(args) != 3 {
-				return usagef("link path takes exactly a link name\n%s", usage)
-			}
-			return linkPath(args[2], stdout)
-		case "status":
-			if len(args) > 3 {
-				return usagef("link status takes at most one link name\n%s", usage)
-			}
-			name := ""
-			if len(args) == 3 {
-				name = args[2]
-			}
-			return cmdStatus(ctx, newClient, name, stdout)
-		case "pull", "push":
-			if len(args) != 3 {
-				return usagef("link %s takes exactly a link name\n%s", args[1], usage)
-			}
-			if args[1] == "pull" {
-				return cmdPull(ctx, newClient, args[2], stdout)
-			}
-			return cmdPush(ctx, newClient, args[2], stdout)
-		default:
-			return usagef("unknown link subcommand %q; want add, ls, rm, path, status, pull, or push\n%s", args[1], usage)
-		}
+		return runLink(ctx, args[1:], newClient, stdout)
 	default:
 		return usagef("unknown command %q\n%s", args[0], usage)
+	}
+}
+
+// runLink dispatches the link subcommands; args starts at the subcommand, so
+// every index here is relative to it rather than to the top-level argv.
+func runLink(ctx context.Context, args []string, newClient clientFn, stdout io.Writer) error {
+	if len(args) == 0 {
+		return usagef("link needs a subcommand: %s\n%s", linkSubcommands, usage)
+	}
+	switch args[0] {
+	case "add":
+		if len(args) != 4 {
+			return usagef("link add takes a name, a g3://<gist-id>/<key> URI, and a local path\n%s", usage)
+		}
+		return linkAdd(args[1], args[2], args[3], stdout)
+	case "ls":
+		if len(args) != 1 {
+			return usagef("link ls takes no arguments\n%s", usage)
+		}
+		return linkLS(stdout)
+	case "rm":
+		if len(args) != 2 {
+			return usagef("link rm takes exactly a link name\n%s", usage)
+		}
+		return linkRM(args[1], stdout)
+	case "path":
+		if len(args) != 2 {
+			return usagef("link path takes exactly a link name\n%s", usage)
+		}
+		return linkPath(args[1], stdout)
+	case "status":
+		if len(args) > 2 {
+			return usagef("link status takes at most one link name\n%s", usage)
+		}
+		name := ""
+		if len(args) == 2 {
+			name = args[1]
+		}
+		return cmdStatus(ctx, newClient, name, stdout)
+	case "pull":
+		if len(args) != 2 {
+			return usagef("link pull takes exactly a link name\n%s", usage)
+		}
+		return cmdPull(ctx, newClient, args[1], stdout)
+	case "push":
+		if len(args) != 2 {
+			return usagef("link push takes exactly a link name\n%s", usage)
+		}
+		return cmdPush(ctx, newClient, args[1], stdout)
+	default:
+		return usagef("unknown link subcommand %q; want %s\n%s", args[0], linkSubcommands, usage)
 	}
 }
