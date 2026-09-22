@@ -99,8 +99,8 @@ func TestRunUsageErrors(t *testing.T) {
 	}
 }
 
-// The link verbs moved under "link" (docs/004 §11.1); asserting the message
-// keeps this from passing on an unknown-link usage error instead.
+// Asserts the message, not just the type: an unknown-link usage error would
+// otherwise pass this vacuously (docs/004 §11.1).
 func TestRetiredTopLevelLinkSpellings(t *testing.T) {
 	setConfigDir(t)
 	for _, cmd := range []string{"path", "status", "pull", "push"} {

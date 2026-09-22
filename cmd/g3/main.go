@@ -116,8 +116,6 @@ func run(ctx context.Context, args []string, newClient clientFn, stdin io.Reader
 	}
 }
 
-// runLink dispatches the link subcommands; args starts at the subcommand, so
-// every index here is relative to it rather than to the top-level argv.
 func runLink(ctx context.Context, args []string, newClient clientFn, stdout io.Writer) error {
 	if len(args) == 0 {
 		return usagef("link needs a subcommand: %s\n%s", linkSubcommands, usage)

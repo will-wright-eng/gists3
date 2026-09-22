@@ -139,7 +139,6 @@ func TestIntegrationLinkLifecycle(t *testing.T) {
 	uri := "g3://" + bucket + "/it.md"
 	mustG3("link", "add", "it", uri, local)
 
-	// $(g3 link path it) is the editor contract: exactly the expanded path.
 	if got := mustG3("link", "path", "it"); got != local+"\n" {
 		t.Fatalf("path = %q, want %q", got, local)
 	}

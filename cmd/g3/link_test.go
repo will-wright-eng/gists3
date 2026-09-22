@@ -204,8 +204,6 @@ func TestLinkPath(t *testing.T) {
 	if err := linkPath("claude", &out); err != nil {
 		t.Fatal(err)
 	}
-	// Exactly the expanded path and a newline: $(g3 link path claude) is
-	// load-bearing, so stdout purity is the contract, not a nicety.
 	if want := filepath.Join(home, ".claude/CLAUDE.md") + "\n"; out.String() != want {
 		t.Errorf("path output = %q, want exactly %q", out.String(), want)
 	}
