@@ -37,7 +37,7 @@ g3 cp @claudemd -                           # @<link> stands in for a link's
 ## Install
 
 ```sh
-brew install will-wright-eng/tools/g3
+brew install will-wright-eng/tap/g3
 # or, from a clone:
 make install    # builds dist/g3, copies it to $HOME/go/bin
 # or, without cloning:
